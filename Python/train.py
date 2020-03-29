@@ -467,6 +467,8 @@ def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=c
                     validation_data = ValAugmentGenerator(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
                     validation_steps = int(validation_steps), epochs=num_epochs, callbacks=callbacks)
     model.save_weights(model_save_path, overwrite=True)
+   
     
     
-run()
+if __name__ == '__main__':
+    run()

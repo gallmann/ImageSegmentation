@@ -206,12 +206,7 @@ def tile_image(image_path, output_folder,src_dir_index, tile_size=256, overlap=0
     height = image_array.shape[0]
     width = image_array.shape[1]
     image_name = os.path.basename(image_path).replace("_mask.tif","").replace(".tif","")
-    
-    image_array = utils.get_image_array(image_path)
-    height = image_array.shape[0]
-    width = image_array.shape[1]
-
-    
+        
             
         
     currentx = 0
