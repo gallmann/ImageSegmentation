@@ -9,7 +9,7 @@ import os
 #os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 import constants
-import random
+import random as rand
 import utils
 import numpy as np
 import matplotlib.pyplot as plt
@@ -232,10 +232,11 @@ def get_mask_path_from_image_path(image_path):
     def rreplace(s, old, new, occurrence):
         li = s.rsplit(old, occurrence)
         return new.join(li)
-    mask_path = image_path.replace(".tif","_mask.png").rreplace("images","masks")
+    mask_path = image_path.replace(".tif","_mask.png").replace("images","masks")
+    return mask_path
     
 
-def MyImageDataGenerator(image_paths,tile_size=256, batch_size = constants.batch_size, overlap = 0):
+def MyImageDataGenerator(image_paths,classes,tile_size=256, batch_size = constants.batch_size, overlap = 0):
     '''Image data generator
         Inputs: 
             batch_size - number of images to import at a time
@@ -243,99 +244,25 @@ def MyImageDataGenerator(image_paths,tile_size=256, batch_size = constants.batch
     '''
     
     batch = np.empty((batch_size,tile_size,tile_size,3),dtype=np.uint8)
-    mask_batch = np.empty((batch_size,tile_size,tile_size,3),dtype=np.uint8)
+    mask_batch = np.empty((batch_size,tile_size,tile_size,len(classes)),dtype=np.uint8)
     i = 0
-
-    for image_path in image_paths:
+    image_index = 0
+    
+    while True:
+        image_path = image_paths[image_index % len(image_paths)]
         mask_path = get_mask_path_from_image_path(image_path)
         tile_generator = TileGenerator(image_path,tile_size=tile_size, overlap = overlap)
         mask_tile_generator = TileGenerator(mask_path,tile_size=tile_size, overlap = overlap,rescale=1)
         num_tiles = get_num_frames([image_path],tile_size = tile_size, overlap = overlap)
         for tile_num in range(0,num_tiles):
             batch[i] = next(tile_generator)
-            
-            mask_encoded = rgb_to_onehot(next(mask_tile_generator), classes)
+            mask_batch[i] = np.asarray(rgb_to_onehot(next(mask_tile_generator), classes))
         
-            yield X1i[0], np.asarray(mask_encoded)
-
             i += 1
             if i == batch_size:
                 i = 0
-                yield batch
-            
-
-
-
-
-def TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5):
-    '''Train Image data generator
-        Inputs: 
-            seed - seed provided to the flow_from_directory function to ensure aligned data flow
-            batch_size - number of images to import at a time
-        Output: Decoded RGB image (height x width x 3) 
-    '''
-    
-    
-        # Normalizing only frame images, since masks contain label info
-    data_gen_args = dict(rescale=1./255)
-    mask_gen_args = dict()
-    
-    train_frames_datagen = ImageDataGenerator(**data_gen_args)
-    train_masks_datagen = ImageDataGenerator(**mask_gen_args)
-    
-    train_image_generator = train_frames_datagen.flow_from_directory(
-    os.path.dirname(train_frames_dir),
-    batch_size = batch_size, seed = seed)
-
-    train_mask_generator = train_masks_datagen.flow_from_directory(
-    os.path.dirname(train_masks_dir),
-    batch_size = batch_size, seed = seed)
-
-    while True:
-        X1i = train_image_generator.next()
-        X2i = train_mask_generator.next()
-        
-        #One hot encoding RGB images
-        mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
-        yield X1i[0], np.asarray(mask_encoded)
-
-
-def ValAugmentGenerator(val_frames_dir,val_masks_dir,classes, seed = 1, batch_size = 5):
-    '''Validation Image data generator
-        Inputs: 
-            seed - seed provided to the flow_from_directory function to ensure aligned data flow
-            batch_size - number of images to import at a time
-        Output: Decoded RGB image (height x width x 3) 
-    '''
-    # Normalizing only frame images, since masks contain label info
-    data_gen_args = dict(rescale=1./255)
-    mask_gen_args = dict()
-
-    val_frames_datagen = ImageDataGenerator(**data_gen_args)
-    val_masks_datagen = ImageDataGenerator(**mask_gen_args)
-
-    val_image_generator = val_frames_datagen.flow_from_directory(
-    os.path.dirname(val_frames_dir),
-    batch_size = batch_size, seed = seed)
-
-
-    val_mask_generator = val_masks_datagen.flow_from_directory(
-    os.path.dirname(val_masks_dir),
-    batch_size = batch_size, seed = seed)
-
-
-    while True:
-        X1i = val_image_generator.next()
-        X2i = val_mask_generator.next()
-        
-        #One hot encoding RGB images
-        mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
-        
-        yield X1i[0], np.asarray(mask_encoded)
-
-
-
-
+                yield batch, mask_batch
+        image_index += 1
 
 
 
@@ -485,22 +412,23 @@ def dice_coef_loss(y_true, y_pred):
 
 def get_data_sets(images_folder):
     
+    import random as rand
     all_image_paths = utils.get_all_image_paths_in_folder(images_folder)
     test_image_paths = []
     val_image_paths = []
     train_image_paths = []
-    
+    print(len(all_image_paths))
     for src_dir_index in range(0,len(constants.data_source_folders)):
         images_in_current_folder = []
         for image_path in all_image_paths:
-            if "_src_dir" + str(i) in image_path:
+            if "_srcdir" + str(src_dir_index) in image_path:
                 images_in_current_folder.append(image_path)
-        
-        random.shuffle(images_in_current_folder)
+        rand.shuffle(images_in_current_folder)    
+
         for i,path in enumerate(images_in_current_folder):
-            if i < constants.val_splits[i]*len(images_in_current_folder):
+            if i < constants.val_splits[src_dir_index]*len(images_in_current_folder):
                 val_image_paths.append(path)
-            elif i < (constants.val_splits[i]+constants.test_splits[i])*len(images_in_current_folder):
+            elif i < (constants.val_splits[src_dir_index]+constants.test_splits[src_dir_index])*len(images_in_current_folder):
                 test_image_paths.append(path)
             else:
                 train_image_paths.append(path)
@@ -571,20 +499,21 @@ def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=c
 
     tb = TensorBoard(log_dir=os.path.join(working_dir,"logs"), write_graph=True)
     mc = ModelCheckpoint(mode='max', filepath=model_save_path, monitor='val_acc', save_best_only='True', save_weights_only='True', verbose=1)
-    es = EarlyStopping(mode='max', monitor='val_acc', patience=10, verbose=1)
+    es = EarlyStopping(mode='max', monitor='acc', patience=10, verbose=1)
     callbacks = [tb, mc, es]
     
-    steps_per_epoch = get_num_frames(train_image_paths)
-    validation_steps = get_num_frames(val_image_paths)
+    steps_per_epoch = int(np.ceil(float(get_num_frames(train_image_paths)) / batch_size))
+    validation_steps = int(np.ceil(float(get_num_frames(val_image_paths)) / batch_size))
+    #TODO: IF train_images is length 0: warning!!
     
     num_epochs = 100
     
-    train_data_generator = MyImageDataGenerator(train_image_paths)  
-    val_data_generator = 
+    train_data_generator = MyImageDataGenerator(train_image_paths,classes)  
+    val_data_generator = MyImageDataGenerator(val_image_paths,classes)  
     
-    result = model.fit_generator(train_data_generator, steps_per_epoch=int(steps_per_epoch) ,
-                    validation_data = ValAugmentGenerator(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
-                    validation_steps = int(validation_steps), epochs=num_epochs, callbacks=callbacks)
+    result = model.fit_generator(train_data_generator, steps_per_epoch=steps_per_epoch,
+                    validation_data = val_data_generator, 
+                    validation_steps = validation_steps, epochs=num_epochs, callbacks=callbacks)
     model.save_weights(model_save_path, overwrite=True)
    
     
