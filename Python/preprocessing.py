@@ -302,8 +302,23 @@ def resize_image_and_change_coordinate_system(image_path, dst_image_path, dst_gs
     else:
         shutil.copyfile(image_path,dst_image_path)
 
+def process_image(images_dir,image_path,src_dir_index,masks_dir,shape_file_path):
+    projected_image_path = os.path.join(images_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
+    resize_image_and_change_coordinate_system(image_path,projected_image_path)
+    image_path = projected_image_path
+    
+    mask_image_path = os.path.join(masks_dir,os.path.basename(image_path).replace(".tif","_srcdir"+ "_mask.png"))
+    #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
+    #print()
+    all_polygons = get_all_polygons_from_shapefile(shape_file_path)
+    all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
 
-def run(src_dirs=constants.data_source_folders, working_dir=constants.working_dir):
+    #a = executor.submit(make_mask_image,image_path,mask_image_path,all_polygons)
+
+    make_mask_image(image_path,mask_image_path,all_polygons)
+
+
+def run(src_dirs=constants.data_source_folders, working_dir=constants.working_dir, threads = 4):
 
     for src_dir_index,src_dir in enumerate(src_dirs):
         shape_file_path = os.path.join(src_dir,"shapes/shapes.shp")
@@ -316,44 +331,49 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
     
     (temp_dir,masks_dir,images_dir) = make_folders(working_dir)
 
+    from concurrent.futures import ProcessPoolExecutor
     
-    for src_dir_index,src_dir in enumerate(src_dirs):
+    with ProcessPoolExecutor(max_workers=threads) as executor:
+        futures = []
     
-        shape_file_path = os.path.join(src_dir,"shapes/shapes.shp")
+        for src_dir_index,src_dir in enumerate(src_dirs):
         
-        images_folder = os.path.join(src_dir,"images")
-        
-        print("Tiling all images in input folder: " + src_dir)
-        for image_path in progressbar.progressbar(utils.get_all_image_paths_in_folder(images_folder)):
+            shape_file_path = os.path.join(src_dir,"shapes/shapes.shp")
+            
+            images_folder = os.path.join(src_dir,"images")
+            
+            print("Generating masks for all images in input folder: " + src_dir)
             
             
-            projected_image_path = os.path.join(images_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
-            resize_image_and_change_coordinate_system(image_path,projected_image_path)
-            image_path = projected_image_path
-            
-            mask_image_path = os.path.join(masks_dir,os.path.basename(image_path).replace(".tif","_srcdir"+ "_mask.png"))
-            #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
-            #print()
-            all_polygons = get_all_polygons_from_shapefile(shape_file_path)
-            all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
+    
+            for image_path in utils.get_all_image_paths_in_folder(images_folder):
+                
+                if threads == 1:
+                    process_image(images_dir,image_path,src_dir_index,masks_dir,shape_file_path)
+                else:
+                    a = executor.submit(process_image,images_dir,image_path,src_dir_index,masks_dir,shape_file_path)
+                    futures.append(a)
 
-            
-            make_mask_image(image_path,mask_image_path,all_polygons)
-            
-            #print("start " + str(datetime.now()))
-            #tile_image(image_path,image_tiles_dir,src_dir_index)
-            #tile_image(mask_image_path,mask_tiles_dir,src_dir_index)
-            #print("end   " + str(datetime.now()))
+    
+            with progressbar.ProgressBar(max_value=len(futures)) as bar:
 
-        
-        #split_train_dir(image_tiles_dir, mask_tiles_dir, val_image_tiles_dir, val_mask_tiles_dir)
-        
-        utils.delete_folder_contents(temp_dir)
+                import time
+                #split_train_dir(image_tiles_dir, mask_tiles_dir, val_image_tiles_dir, val_mask_tiles_dir)
+                while True:
+                    progress = sum([f.done() for f in futures])
+                    bar.update(progress)
+                    if progress == len(futures):
+                        break
+                    time.sleep(1)
+
+                
+                
+            utils.delete_folder_contents(temp_dir)
     shutil.rmtree(temp_dir)
     
     
-
-run()
+if __name__ == '__main__':
+    run()
 
 
 

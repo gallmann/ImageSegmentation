@@ -38,7 +38,7 @@ def TileGenerator(image_path, tile_size = 256, overlap = 0):
             
             result = np.full((tile_size,tile_size,3),0,dtype=np.float64)
             result[:cropped_array.shape[0],:cropped_array.shape[1]] = cropped_array
-            
+                        
             result*=1./255
             yield result
             
@@ -67,6 +67,7 @@ def MyImageDataGenerator(image_path,tile_size=256, batch_size = constants.batch_
                 batch[i] = next(tile_generator)
             except StopIteration:
                 stop = True
+                batch = batch[:i,:,:,:]
         yield batch
         if stop:
             break
@@ -113,7 +114,6 @@ def reassemble(original_image_path, dst_image_path, predictions, classes, tile_s
     currenty = 0
     while currenty < height:
         while currentx < width:       
-            
             tile = train.onehot_to_rgb(predictions[i],classes)
             mask[currenty:currenty+tile_size,currentx:currentx+tile_size,:3] = tile
             i+=1
@@ -145,7 +145,7 @@ def run(working_dir=constants.working_dir, batch_size = constants.batch_size):
         
         data_generator = MyImageDataGenerator(image_path,batch_size=batch_size)
         
-        pred = model.predict_generator(data_generator,steps=22)
+        pred = model.predict_generator(data_generator,steps=64)
         mask_path = os.path.join("C:/Users/johan/Desktop/test", os.path.basename(image_path))
         reassemble(image_path,mask_path,pred,classes)
         

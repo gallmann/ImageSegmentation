@@ -9,6 +9,7 @@ import os
 #os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 import constants
+import random
 import utils
 import numpy as np
 import matplotlib.pyplot as plt
@@ -99,6 +100,8 @@ def _read_to_tensor(fname, output_height=256, output_width=256, normalize_data=F
 
 def make_folders(project_dir):
     training_data_dir = os.path.join(project_dir,"training_data")
+    
+    all_image_paths = utils.get_all
     
 
     folders = ['train_frames/train', 'train_masks/train', 'val_frames/val', 'val_masks/val']
@@ -199,6 +202,71 @@ def onehot_to_rgb(onehot,classes):
 
 
 
+
+def TileGenerator(image_path, tile_size = 256, overlap = 0, rescale = 1./255):
+    
+    image_array = utils.get_image_array(image_path)
+    height = image_array.shape[0]
+    width = image_array.shape[1]        
+                
+    currentx = 0
+    currenty = 0
+    while currenty < height:
+        while currentx < width:       
+            
+            cropped_array = image_array[currenty:currenty+tile_size,currentx:currentx+tile_size,:3]
+            
+            result = np.full((tile_size,tile_size,3),0,dtype=np.float64)
+            result[:cropped_array.shape[0],:cropped_array.shape[1]] = cropped_array
+                        
+            result*=rescale
+            yield result
+            
+            
+            currentx += tile_size-overlap
+        currenty += tile_size-overlap
+        currentx = 0
+
+
+def get_mask_path_from_image_path(image_path):
+    def rreplace(s, old, new, occurrence):
+        li = s.rsplit(old, occurrence)
+        return new.join(li)
+    mask_path = image_path.replace(".tif","_mask.png").rreplace("images","masks")
+    
+
+def MyImageDataGenerator(image_paths,tile_size=256, batch_size = constants.batch_size, overlap = 0):
+    '''Image data generator
+        Inputs: 
+            batch_size - number of images to import at a time
+        Output: Decoded RGB image (height x width x 3) 
+    '''
+    
+    batch = np.empty((batch_size,tile_size,tile_size,3),dtype=np.uint8)
+    mask_batch = np.empty((batch_size,tile_size,tile_size,3),dtype=np.uint8)
+    i = 0
+
+    for image_path in image_paths:
+        mask_path = get_mask_path_from_image_path(image_path)
+        tile_generator = TileGenerator(image_path,tile_size=tile_size, overlap = overlap)
+        mask_tile_generator = TileGenerator(mask_path,tile_size=tile_size, overlap = overlap,rescale=1)
+        num_tiles = get_num_frames([image_path],tile_size = tile_size, overlap = overlap)
+        for tile_num in range(0,num_tiles):
+            batch[i] = next(tile_generator)
+            
+            mask_encoded = rgb_to_onehot(next(mask_tile_generator), classes)
+        
+            yield X1i[0], np.asarray(mask_encoded)
+
+            i += 1
+            if i == batch_size:
+                i = 0
+                yield batch
+            
+
+
+
+
 def TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5):
     '''Train Image data generator
         Inputs: 
@@ -229,7 +297,6 @@ def TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, bat
         
         #One hot encoding RGB images
         mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
-        
         yield X1i[0], np.asarray(mask_encoded)
 
 
@@ -265,6 +332,10 @@ def ValAugmentGenerator(val_frames_dir,val_masks_dir,classes, seed = 1, batch_si
         mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
         
         yield X1i[0], np.asarray(mask_encoded)
+
+
+
+
 
 
 
@@ -412,6 +483,45 @@ def dice_coef_loss(y_true, y_pred):
     return 1.-dice_coef(y_true, y_pred)
 
 
+def get_data_sets(images_folder):
+    
+    all_image_paths = utils.get_all_image_paths_in_folder(images_folder)
+    test_image_paths = []
+    val_image_paths = []
+    train_image_paths = []
+    
+    for src_dir_index in range(0,len(constants.data_source_folders)):
+        images_in_current_folder = []
+        for image_path in all_image_paths:
+            if "_src_dir" + str(i) in image_path:
+                images_in_current_folder.append(image_path)
+        
+        random.shuffle(images_in_current_folder)
+        for i,path in enumerate(images_in_current_folder):
+            if i < constants.val_splits[i]*len(images_in_current_folder):
+                val_image_paths.append(path)
+            elif i < (constants.val_splits[i]+constants.test_splits[i])*len(images_in_current_folder):
+                test_image_paths.append(path)
+            else:
+                train_image_paths.append(path)
+        
+        
+    
+    return [train_image_paths,val_image_paths,test_image_paths] 
+
+
+def get_num_frames(image_paths,tile_size=256, overlap = 0):
+    
+    num_frames = 0
+    
+    for image_path in image_paths:
+        image = Image.open(image_path)
+        width, height = image.size
+        tiles_x = int(np.ceil(float(width)/float(tile_size-overlap)))
+        tiles_y = int(np.ceil(float(height)/float(tile_size-overlap)))
+        num_frames += tiles_x*tiles_y
+    return num_frames
+    
 
 def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=constants.batch_size):
     x = tf.random.uniform([3, 3])
@@ -426,21 +536,27 @@ def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=c
     
     print("Tensorflow eager execution: " + str(tf.executing_eagerly()))
     
+    
     training_data_dir = os.path.join(working_dir,"training_data")
-    mask_tiles_dir = os.path.join(training_data_dir,"masks")
-    image_tiles_dir = os.path.join(training_data_dir,"images")
-
-
-    frame_tensors, masks_tensors, frames_list, masks_list = read_images(image_tiles_dir,mask_tiles_dir)
+    masks_dir = os.path.join(training_data_dir,"masks")
+    images_dir = os.path.join(training_data_dir,"images")
     
-    [train_frames_dir,train_masks_dir,val_frames_dir,val_masks_dir] = make_folders(working_dir)
+    [train_image_paths,val_image_paths,test_image_paths] = get_data_sets(images_dir)
+    
+    
+    
+    
+
+    
+    #frame_tensors, masks_tensors, frames_list, masks_list = read_images(image_tiles_dir,mask_tiles_dir)
+    #[train_frames_dir,train_masks_dir,val_frames_dir,val_masks_dir] = make_folders(working_dir)
 
 
     
-    split_train_dir(image_tiles_dir,mask_tiles_dir,val_frames_dir,val_masks_dir,splits)
-    for i in range(len(splits)):
-        splits[i] = 1
-    split_train_dir(image_tiles_dir,mask_tiles_dir,train_frames_dir,train_masks_dir,splits)
+    #split_train_dir(image_tiles_dir,mask_tiles_dir,val_frames_dir,val_masks_dir,splits)
+    #for i in range(len(splits)):
+    #    splits[i] = 1-splits[i]
+    #split_train_dir(image_tiles_dir,mask_tiles_dir,train_frames_dir,train_masks_dir,splits)
     
     classes = utils.load_obj(os.path.join(working_dir,"labelmap.pkl"))
         
@@ -448,7 +564,7 @@ def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=c
 
     model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=[tversky_loss,dice_coef,'accuracy'])
 
-    model.summary()
+    #model.summary()
     #model.load_weights("model_100_epochs.h5")
     
     model_save_path = os.path.join(working_dir,"trained_model.h5")
@@ -458,12 +574,15 @@ def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=c
     es = EarlyStopping(mode='max', monitor='val_acc', patience=10, verbose=1)
     callbacks = [tb, mc, es]
     
-    steps_per_epoch = np.ceil(float(len(frames_list) - round(0.1*len(frames_list))) / float(batch_size))
-    validation_steps = np.ceil(float((round(0.1*len(frames_list)))) / float(batch_size))
+    steps_per_epoch = get_num_frames(train_image_paths)
+    validation_steps = get_num_frames(val_image_paths)
     
     num_epochs = 100
-        
-    result = model.fit_generator(TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,batch_size=batch_size), steps_per_epoch=int(steps_per_epoch) ,
+    
+    train_data_generator = MyImageDataGenerator(train_image_paths)  
+    val_data_generator = 
+    
+    result = model.fit_generator(train_data_generator, steps_per_epoch=int(steps_per_epoch) ,
                     validation_data = ValAugmentGenerator(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
                     validation_steps = int(validation_steps), epochs=num_epochs, callbacks=callbacks)
     model.save_weights(model_save_path, overwrite=True)
