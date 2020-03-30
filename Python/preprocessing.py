@@ -106,7 +106,7 @@ def save_array_as_image(image_path,image_array, tile_size = None):
 
 
 
-def make_mask_image(image_path, mask_image_path, all_polygons):
+def make_mask_image(image_path, mask_image_path, all_polygons, save_with_geo_coordinates = False):
     
     outer_polygons = []
     for polygon in all_polygons:
@@ -134,8 +134,10 @@ def make_mask_image(image_path, mask_image_path, all_polygons):
         mask[:,:,2] = mask[:,:,2] * alpha_mask + utils.name2color(classes,"Nothing")[2] * (1-alpha_mask)
     
     
-    save_array_as_image_with_geo_coords(mask_image_path,image_path,mask)
-    #save_array_as_image(mask_image_path, mask)
+    if save_with_geo_coordinates:
+        save_array_as_image_with_geo_coords(mask_image_path,image_path,mask)
+    else:
+        save_array_as_image(mask_image_path, mask)
 
 
 def save_array_as_image_with_geo_coords(dst_image_path, image_with_coords, image_array):
@@ -181,6 +183,7 @@ def convert_polygon_coords_to_pixel_coords(all_polygons, image_path):
         result_polygons.append(polygon)
 
     return result_polygons
+
 
 
 
@@ -311,7 +314,7 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
     utils.save_obj(classes,os.path.join(working_dir,"labelmap.pkl"))
     
     
-    (temp_dir,mask_tiles_dir,image_tiles_dir) = make_folders(working_dir)
+    (temp_dir,masks_dir,images_dir) = make_folders(working_dir)
 
     
     for src_dir_index,src_dir in enumerate(src_dirs):
@@ -323,25 +326,24 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
         print("Tiling all images in input folder: " + src_dir)
         for image_path in progressbar.progressbar(utils.get_all_image_paths_in_folder(images_folder)):
             
-            projected_image_path = os.path.join(temp_dir,os.path.basename(image_path))
+            
+            projected_image_path = os.path.join(images_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
             resize_image_and_change_coordinate_system(image_path,projected_image_path)
             image_path = projected_image_path
-            '''
-            #Change Coordinate System of Image if necessary      
-            proj = osr.SpatialReference(wkt=gdal.Open(image_path).GetProjection())
-            epsg_code_of_image = proj.GetAttrValue('AUTHORITY',1)
-            if epsg_code_of_image != EPSG_TO_WORK_WITH:
-                projected_image_path = os.path.join(temp_dir,os.path.basename(image_path))
-                gdal.Warp(projected_image_path,image_path,dstSRS='EPSG:'+str(EPSG_TO_WORK_WITH))
-                image_path = projected_image_path
-            '''
-            mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
             
+            mask_image_path = os.path.join(masks_dir,os.path.basename(image_path).replace(".tif","_srcdir"+ "_mask.png"))
+            #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
+            #print()
             all_polygons = get_all_polygons_from_shapefile(shape_file_path)
-            all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)        
+            all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
+
+            
             make_mask_image(image_path,mask_image_path,all_polygons)
-            tile_image(image_path,image_tiles_dir,src_dir_index)
-            tile_image(mask_image_path,mask_tiles_dir,src_dir_index)
+            
+            #print("start " + str(datetime.now()))
+            #tile_image(image_path,image_tiles_dir,src_dir_index)
+            #tile_image(mask_image_path,mask_tiles_dir,src_dir_index)
+            #print("end   " + str(datetime.now()))
 
         
         #split_train_dir(image_tiles_dir, mask_tiles_dir, val_image_tiles_dir, val_mask_tiles_dir)
