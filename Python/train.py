@@ -74,6 +74,16 @@ def onehot_to_rgb(onehot,classes):
     return np.uint8(output)
 
 
+def save_array_as_image(image_path,image_array):
+    
+    image_array = image_array.astype(np.uint8)
+    if not image_path.endswith(".png") and not image_path.endswith(".jpg") and not image_path.endswith(".tif"):
+        print("Error! image_path has to end with .png, .jpg or .tif")
+    height = image_array.shape[0]
+    width = image_array.shape[1]
+    if height*width < Image.MAX_IMAGE_PIXELS:
+        newIm = Image.fromarray(image_array, "RGB")
+        newIm.save(image_path)
 
 
 def TileGenerator(image_path, tile_size = 256, overlap = 0, rescale = 1./255):
@@ -88,11 +98,11 @@ def TileGenerator(image_path, tile_size = 256, overlap = 0, rescale = 1./255):
         while currentx < width:       
             
             cropped_array = image_array[currenty:currenty+tile_size,currentx:currentx+tile_size,:3]
-            
-            result = np.full((tile_size,tile_size,3),0,dtype=np.float64)
+            result = np.full((tile_size,tile_size,3),0,dtype=np.float32)
             result[:cropped_array.shape[0],:cropped_array.shape[1]] = cropped_array
-                        
             result*=rescale
+            #np.set_printoptions(threshold=sys.maxsize)
+
             yield result
             
             
@@ -102,9 +112,6 @@ def TileGenerator(image_path, tile_size = 256, overlap = 0, rescale = 1./255):
 
 
 def get_mask_path_from_image_path(image_path):
-    def rreplace(s, old, new, occurrence):
-        li = s.rsplit(old, occurrence)
-        return new.join(li)
     mask_path = image_path.replace(".tif","_mask.png").replace("images","masks")
     return mask_path
     
@@ -116,8 +123,8 @@ def MyImageDataGenerator(image_paths,classes,tile_size=256, batch_size = constan
         Output: Decoded RGB image (height x width x 3) 
     '''
     
-    batch = np.empty((batch_size,tile_size,tile_size,3),dtype=np.uint8)
-    mask_batch = np.empty((batch_size,tile_size,tile_size,len(classes)),dtype=np.uint8)
+    batch = np.empty((batch_size,tile_size,tile_size,3),dtype=np.float32)
+    mask_batch = np.empty((batch_size,tile_size,tile_size,len(classes)),dtype=np.int8)
     i = 0
     image_index = 0
     
@@ -129,11 +136,17 @@ def MyImageDataGenerator(image_paths,classes,tile_size=256, batch_size = constan
         num_tiles = get_num_frames([image_path],tile_size = tile_size, overlap = overlap)
         for tile_num in range(0,num_tiles):
             batch[i] = next(tile_generator)
+            
             mask_batch[i] = np.asarray(rgb_to_onehot(next(mask_tile_generator), classes))
-        
+            
             i += 1
             if i == batch_size:
                 i = 0
+                
+
+                #print(batch)
+                #print(batch.dtype)
+                
                 yield batch, mask_batch
         image_index += 1
 
@@ -314,7 +327,6 @@ def get_data_sets(images_folder):
 def get_num_frames(image_paths,tile_size=256, overlap = 0):
     
     num_frames = 0
-    
     for image_path in image_paths:
         image = Image.open(image_path)
         width, height = image.size
@@ -324,7 +336,7 @@ def get_num_frames(image_paths,tile_size=256, overlap = 0):
     return num_frames
     
 
-def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=constants.batch_size):
+def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     x = tf.random.uniform([3, 3])
 
     print("Is there a GPU available: "),
@@ -365,7 +377,8 @@ def run(working_dir=constants.working_dir, splits=constants.splits, batch_size=c
     steps_per_epoch = int(np.ceil(float(get_num_frames(train_image_paths)) / batch_size))
     validation_steps = int(np.ceil(float(get_num_frames(val_image_paths)) / batch_size))
     #TODO: IF train_images is length 0: warning!!
-    
+    print(steps_per_epoch)
+    print(validation_steps)
     num_epochs = 100
     
     train_data_generator = MyImageDataGenerator(train_image_paths,classes)  
