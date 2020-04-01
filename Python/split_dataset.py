@@ -44,7 +44,7 @@ def make_folders(project_dir):
     training_data_dir = os.path.join(project_dir,"training_data")
     
 
-    folders = ['train_frames', 'train_masks', 'val_frames', 'val_masks', 'test_frames', 'test_masks']
+    folders = ['train_frames/0', 'train_masks/0', 'val_frames/0', 'val_masks/0', 'test_frames/0', 'test_masks/0']
     
     full_folder_paths = []
     

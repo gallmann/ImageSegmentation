@@ -253,7 +253,7 @@ def dice_coef_loss(y_true, y_pred):
 def get_folders(working_dir):
     training_data_dir = os.path.join(working_dir,"training_data")
     
-    folders = ['train_frames', 'train_masks', 'val_frames', 'val_masks', 'test_frames', 'test_masks']
+    folders = ['train_frames/0', 'train_masks/0', 'val_frames/0', 'val_masks/0', 'test_frames/0', 'test_masks/0']
     
     full_folder_paths = []
     
@@ -313,6 +313,7 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
                     validation_data = DataGenerator(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
                     validation_steps = int(validation_steps), epochs=num_epochs, callbacks=callbacks)
     #model.save_weights(model_save_path, overwrite=True)
+    
     
 if __name__ == '__main__':
     run()
