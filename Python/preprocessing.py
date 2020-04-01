@@ -16,6 +16,7 @@ import numpy as np
 import shutil
 import constants
 import progressbar
+import split_dataset
 
 EPSG_TO_WORK_WITH = constants.EPSG_TO_WORK_WITH
 
@@ -230,7 +231,7 @@ def tile_image(image_path, output_folder,src_dir_index, is_mask=False, tile_size
             tile = Image.fromarray(result)
 
             #tile = image.crop((currentx,currenty,currentx + tile_size,currenty + tile_size))
-            output_image_path = os.path.join(output_folder,  image_name + "_src_dir" + str(src_dir_index)  + "_subtile_" + "x" + str(currentx) + "_y" + str(currenty) + ".png")
+            output_image_path = os.path.join(output_folder,  image_name + "_subtile_" + "x" + str(currentx) + "_y" + str(currenty) + ".png")
             tile.save(output_image_path,"PNG")
                         
             currentx += tile_size-overlap
@@ -303,6 +304,7 @@ def resize_image_and_change_coordinate_system(image_path, dst_image_path, dst_gs
         shutil.copyfile(image_path,dst_image_path)
 
 
+
 def run(src_dirs=constants.data_source_folders, working_dir=constants.working_dir):
 
     for src_dir_index,src_dir in enumerate(src_dirs):
@@ -334,7 +336,7 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
             resize_image_and_change_coordinate_system(image_path,projected_image_path)
             image_path = projected_image_path
             
-            mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.png"))
+            mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
             #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
             #print()
             all_polygons = get_all_polygons_from_shapefile(shape_file_path)
@@ -353,7 +355,8 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
             
         utils.delete_folder_contents(temp_dir)
     shutil.rmtree(temp_dir)
-    
+    print("Splitting all training tiles and masks into train, validation and test sets...")
+    split_dataset.split_into_train_val_and_test_sets(working_dir)
     
 if __name__ == '__main__':
     run()
