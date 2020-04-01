@@ -187,7 +187,7 @@ def convert_polygon_coords_to_pixel_coords(all_polygons, image_path):
 
 
 
-def tile_image(image_path, output_folder,src_dir_index, tile_size=256, overlap=0):
+def tile_image(image_path, output_folder,src_dir_index, is_mask=False, tile_size=256, overlap=0):
     
     """Tiles the image and the annotations into square shaped tiles of size tile_size
         Requires the image to have either a tablet annotation file (imagename_annotations.json)
@@ -219,7 +219,7 @@ def tile_image(image_path, output_folder,src_dir_index, tile_size=256, overlap=0
             
             cropped_array = image_array[currenty:currenty+tile_size,currentx:currentx+tile_size,:3]
             
-            if ("_mask.tif" in os.path.basename(image_path)):
+            if is_mask:
                 result = np.full((tile_size,tile_size,3),utils.name2color(classes,"Nothing"),dtype=np.uint8)
             else:
                 result = np.full((tile_size,tile_size,3),0,dtype=np.uint8)
@@ -230,7 +230,7 @@ def tile_image(image_path, output_folder,src_dir_index, tile_size=256, overlap=0
             tile = Image.fromarray(result)
 
             #tile = image.crop((currentx,currenty,currentx + tile_size,currenty + tile_size))
-            output_image_path = os.path.join(output_folder,  image_name + "_src_dir" + str(src_dir_index)  + "_subtile_" + "x" + str(currentx) + "y" + str(currenty) + "_size" + str(tile_size) + ".png")
+            output_image_path = os.path.join(output_folder,  image_name + "_src_dir" + str(src_dir_index)  + "_subtile_" + "x" + str(currentx) + "_y" + str(currenty) + ".png")
             tile.save(output_image_path,"PNG")
                         
             currentx += tile_size-overlap
@@ -302,21 +302,6 @@ def resize_image_and_change_coordinate_system(image_path, dst_image_path, dst_gs
     else:
         shutil.copyfile(image_path,dst_image_path)
 
-def process_image(images_dir,image_path,src_dir_index,masks_dir,shape_file_path):
-    projected_image_path = os.path.join(images_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
-    resize_image_and_change_coordinate_system(image_path,projected_image_path)
-    image_path = projected_image_path
-    
-    mask_image_path = os.path.join(masks_dir,os.path.basename(image_path).replace(".tif","_mask.png"))
-    #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
-    #print()
-    all_polygons = get_all_polygons_from_shapefile(shape_file_path)
-    all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
-
-    #a = executor.submit(make_mask_image,image_path,mask_image_path,all_polygons)
-
-    make_mask_image(image_path,mask_image_path,all_polygons)
-
 
 def run(src_dirs=constants.data_source_folders, working_dir=constants.working_dir):
 
@@ -329,7 +314,7 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
     utils.save_obj(classes,os.path.join(working_dir,"labelmap.pkl"))
     
     
-    (temp_dir,masks_dir,images_dir) = make_folders(working_dir)
+    (temp_dir,mask_tiles_dir,image_tiles_dir) = make_folders(working_dir)
 
     
     for src_dir_index,src_dir in enumerate(src_dirs):
@@ -344,7 +329,25 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
 
         for image_path in progressbar.progressbar(utils.get_all_image_paths_in_folder(images_folder)):
             
-            process_image(images_dir,image_path,src_dir_index,masks_dir,shape_file_path)
+            
+            projected_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
+            resize_image_and_change_coordinate_system(image_path,projected_image_path)
+            image_path = projected_image_path
+            
+            mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.png"))
+            #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
+            #print()
+            all_polygons = get_all_polygons_from_shapefile(shape_file_path)
+            all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
+        
+            #a = executor.submit(make_mask_image,image_path,mask_image_path,all_polygons)
+        
+            make_mask_image(image_path,mask_image_path,all_polygons)
+            
+            tile_image(mask_image_path,mask_tiles_dir,src_dir_index, is_mask= True)
+            tile_image(image_path,image_tiles_dir,src_dir_index)
+
+            
 
 
             
