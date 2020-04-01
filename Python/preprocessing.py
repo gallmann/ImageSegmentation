@@ -69,7 +69,7 @@ def get_all_polygons_from_shapefile(project_dir):
 
 
 
-def save_array_as_image(image_path,image_array, tile_size = None):
+def save_array_as_image(image_path,image_array):
     
     image_array = image_array.astype(np.uint8)
     if not image_path.endswith(".png") and not image_path.endswith(".jpg") and not image_path.endswith(".tif"):
@@ -91,19 +91,7 @@ def save_array_as_image(image_path,image_array, tile_size = None):
         ds.GetRasterBand(1).WriteArray(image_array[0], 0, 0)
         ds.GetRasterBand(2).WriteArray(image_array[1], 0, 0)
         ds.GetRasterBand(3).WriteArray(image_array[2], 0, 0)
-
-        if not tile_size:
-            gdal.Translate(image_path,ds, options=gdal.TranslateOptions(bandList=[1,2,3], format="png"))
-
-        else:
-            for i in range(0, width, tile_size):
-                for j in range(0, height, tile_size):
-                    #define paths of image tile and the corresponding json file containing the geo information
-                    out_path_image = image_path[:-4] + "row" + str(int(j/tile_size)) + "_col" + str(int(i/tile_size)) + ".png"
-                    #tile image with gdal (copy bands 1, 2 and 3)
-                    gdal.Translate(out_path_image,ds, options=gdal.TranslateOptions(srcWin=[i,j,tile_size,tile_size], bandList=[1,2,3]))
-
-
+        gdal.Translate(image_path,ds, options=gdal.TranslateOptions(bandList=[1,2,3], format="png"))
 
 
 
@@ -189,23 +177,7 @@ def convert_polygon_coords_to_pixel_coords(all_polygons, image_path):
 
 
 def tile_image(image_path, output_folder,src_dir_index, is_mask=False, tile_size=256, overlap=0):
-    
-    """Tiles the image and the annotations into square shaped tiles of size tile_size
-        Requires the image to have either a tablet annotation file (imagename_annotations.json)
-        or the LabelMe annotation file (imagename.json) stored in the same folder
-
-    Parameters:
-        image_path (str): The image path 
-        output_folder (string): Path of the output directory
-        tile_size (int): the tile size 
-        overlap (int): overlap in pixels to use during the image tiling process
-    
-    Returns:
-        Fills the output_folder with all tiles (and annotation files in xml format)
-        that contain any flowers.
-    """
-    
-    #image = Image.open(image_path)
+        
     image_array = utils.get_image_array(image_path)
     height = image_array.shape[0]
     width = image_array.shape[1]
@@ -227,10 +199,8 @@ def tile_image(image_path, output_folder,src_dir_index, is_mask=False, tile_size
             result[:cropped_array.shape[0],:cropped_array.shape[1]] = cropped_array
                     
               
-            #print(result.dtype)
             tile = Image.fromarray(result)
 
-            #tile = image.crop((currentx,currenty,currentx + tile_size,currenty + tile_size))
             output_image_path = os.path.join(output_folder,  image_name + "_subtile_" + "x" + str(currentx) + "_y" + str(currenty) + ".png")
             tile.save(output_image_path,"PNG")
                         
@@ -264,15 +234,7 @@ def make_folders(project_dir):
 
     image_tiles_dir = os.path.join(training_data_dir,"images")
     os.makedirs(image_tiles_dir,exist_ok=True)
-    
-    '''
-    val_mask_tiles_dir = os.path.join(training_data_dir,"val_masks")
-    os.makedirs(val_mask_tiles_dir,exist_ok=True)
-
-    val_image_tiles_dir = os.path.join(training_data_dir,"val_images")
-    os.makedirs(val_image_tiles_dir,exist_ok=True)
-    '''
-    
+        
     return (temp_dir,mask_tiles_dir,image_tiles_dir)
 
 
@@ -337,13 +299,9 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
             image_path = projected_image_path
             
             mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
-            #mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
-            #print()
             all_polygons = get_all_polygons_from_shapefile(shape_file_path)
             all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
-        
-            #a = executor.submit(make_mask_image,image_path,mask_image_path,all_polygons)
-        
+                
             make_mask_image(image_path,mask_image_path,all_polygons)
             
             tile_image(mask_image_path,mask_tiles_dir,src_dir_index, is_mask= True)

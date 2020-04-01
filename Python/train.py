@@ -87,13 +87,20 @@ def DataGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size 
     batch_size = batch_size, seed = seed)
 
     while True:
-        X1i = train_image_generator.next()
-        X2i = train_mask_generator.next()
+        batch = np.zeros((batch_size,256,256,3))
+        batch_mask = np.zeros((batch_size,256,256,3))
+        
+        next_batch = train_image_generator.next()[0]
+        next_batch_mask = train_mask_generator.next()[0]
+        
+        batch[:next_batch.shape[0],:,:,:] = next_batch
+        
+        batch_mask[:next_batch_mask.shape[0],:,:,:] = next_batch_mask
         
         #One hot encoding RGB images
-        mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
+        mask_encoded = [rgb_to_onehot(batch_mask[x,:,:,:], classes) for x in range(batch_mask.shape[0])]
         
-        yield X1i[0], np.asarray(mask_encoded)
+        yield batch, np.asarray(mask_encoded)
 
 
 
@@ -295,8 +302,9 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     es = EarlyStopping(mode='max', monitor='val_acc', patience=10, verbose=1)
     callbacks = [tb, mc, es]
     
-    steps_per_epoch = int(np.floor(float(num_train_frames) / batch_size))
-    validation_steps = int(np.floor(float(num_val_frames) / batch_size))
+    
+    steps_per_epoch = int(np.ceil(float(num_train_frames) / batch_size))
+    validation_steps = int(np.ceil(float(num_val_frames) / batch_size))
 
     num_epochs = 100
         
