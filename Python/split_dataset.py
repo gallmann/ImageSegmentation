@@ -81,7 +81,9 @@ def split_into_train_val_and_test_sets(working_dir):
         
         
         
-        
+if __name__ == '__main__':
+    split_into_train_val_and_test_sets(constants.working_dir)
+
         
         
         
