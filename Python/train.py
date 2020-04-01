@@ -93,15 +93,6 @@ def DataGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size 
         #One hot encoding RGB images
         mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
         
-        
-        #np.set_printoptions(threshold=sys.maxsize)
-
-        #print(X1i[0])
-        #print(np.asarray(mask_encoded).dtype)
-        #import time
-        #time.sleep(30)
-
-
         yield X1i[0], np.asarray(mask_encoded)
 
 
@@ -304,8 +295,8 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     es = EarlyStopping(mode='max', monitor='val_acc', patience=10, verbose=1)
     callbacks = [tb, mc, es]
     
-    steps_per_epoch = int(np.ceil(float(num_train_frames) / batch_size))
-    validation_steps = int(np.ceil(float(num_val_frames) / batch_size))
+    steps_per_epoch = int(np.floor(float(num_train_frames) / batch_size))
+    validation_steps = int(np.floor(float(num_val_frames) / batch_size))
 
     num_epochs = 100
         
