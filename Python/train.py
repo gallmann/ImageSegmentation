@@ -11,19 +11,8 @@ import os
 import constants
 import utils
 import numpy as np
-import matplotlib.pyplot as plt
-import re
-from PIL import Image
-import shutil
-import progressbar
 
-import numpy as np
-import matplotlib.pyplot as plt
-from pylab import *
-import os
-import sys
 from tensorflow.keras.models import Model
-from tensorflow.keras.regularizers import l2
 from tensorflow.keras.layers import *
 
 
@@ -33,125 +22,15 @@ from tensorflow.keras.models import *
 #from tensorflow.keras.applications.imagenet_utils import _obtain_input_shape
 import tensorflow.keras.backend as K
 import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Convolution2D, ZeroPadding2D, MaxPooling2D, Cropping2D, Conv2D
-from tensorflow.keras.layers import Input, Add, Dropout, Permute, add
-from tensorflow.compat.v1.layers import conv2d_transpose
+from tensorflow.keras.layers import MaxPooling2D, Conv2D
+from tensorflow.keras.layers import Input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
+from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping
 tf.enable_eager_execution()
 print("Tensorflow version: " + tf.__version__)
 
 
-def read_images(image_tiles_dir,mask_tiles_dir):
-    '''Function to get all image directories, read images and masks in separate tensors
-        Inputs: 
-            img_dir - file directory
-        Outputs 
-            frame_tensors, masks_tensors, frame files list, mask files list
-    '''
     
-    # Get the file names list from provided directory
-    frames_list = utils.get_all_image_paths_in_folder(image_tiles_dir)
-    masks_list = utils.get_all_image_paths_in_folder(mask_tiles_dir)
-        
-    print('{} frame files found in the provided directory.'.format(len(frames_list)))
-    print('{} mask files found in the provided directory.'.format(len(masks_list)))
-    
-    
-    # Create dataset of tensors
-    frame_data = tf.data.Dataset.from_tensor_slices(frames_list)
-    masks_data = tf.data.Dataset.from_tensor_slices(masks_list)
-    
-    # Read images into the tensor dataset
-    frame_tensors = frame_data.map(_read_to_tensor)
-    masks_tensors = masks_data.map(_read_to_tensor)
-    
-    print('Completed importing {} frame images from the provided directory.'.format(len(frames_list)))
-    print('Completed importing {} mask images from the provided directory.'.format(len(masks_list)))
-    
-    return frame_tensors, masks_tensors, frames_list, masks_list
-
-    
-def _read_to_tensor(fname, output_height=256, output_width=256, normalize_data=False):
-    '''Function to read images from given image file path, and provide resized images as tensors
-        Inputs: 
-            fname - image file path
-            output_height - required output image height
-            output_width - required output image width
-            normalize_data - if True, normalize data to be centered around 0 (mean 0, range 0 to 1)
-        Output: Processed image tensors
-    '''
-    
-    # Read the image as a tensor
-    img_strings = tf.io.read_file(fname)
-    imgs_decoded = tf.image.decode_jpeg(img_strings)
-    
-    # Resize the image
-    output = tf.image.resize(imgs_decoded, [output_height, output_width])
-    
-    # Normalize if required
-    if normalize_data:
-        output = (output - 128) / 128
-    return output
-
-
-    
-
-
-
-def split_train_dir(src_dir_images,src_dir_masks, dst_dir_images, dst_dir_masks, splits):
-    """Splits all annotated images into training and testing directory
-
-    Parameters:
-        src_dir (str): the directory path containing all images and xml annotation files 
-        dst_dir (str): path to the test directory where part of the images (and 
-                 annotations) will be copied to
-        labels (dict): a dict inside of which the flowers are counted
-        labels_dst (dict): a dict inside of which the flowers are counted that
-            moved to the dst directory
-        split_mode (str): If split_mode is "random", the images are split
-            randomly into test and train directory. If split_mode is "deterministic",
-            the images will be split in the same way every time this script is 
-            executed and therefore making different configurations comparable
-        input_folders (list): A list of strings containing all input_folders. 
-        splits (list): A list of floats between 0 and 1 of the same length as 
-            input_folders. Each boolean indicates what portion of the images
-            inside the corresponding input folder should be used for testing or validating and
-            not for training
-        test_dir_full_size (str): path of folder to which all full size original
-            images that are moved to the test directory should be copied to.
-            (this folder can be used for evaluation after training) (default is None)
-    
-    Returns:
-        None
-    """
-
-    images = utils.get_all_image_paths_in_folder(src_dir_images)
-
-    for input_folder_index in range(0,len(splits)):
-        
-        portion_to_move_to_dst_dir = float(splits[input_folder_index])
-        
-        images_in_current_folder = []        
-
-        #get all image_paths in current folder
-        for image_path in images:
-            if "src_dir" + str(input_folder_index) in image_path:
-                images_in_current_folder.append(image_path)
-        
-                
-        import random as rand
-        #shuffle the images randomly
-        rand.shuffle(images_in_current_folder)
-        #and move the first few images to the test folder
-        for i in range(0,int(len(images_in_current_folder)*portion_to_move_to_dst_dir)):
-            dest_image_file = os.path.join(dst_dir_images,os.path.basename(images_in_current_folder[i]))
-            shutil.copyfile(images_in_current_folder[i], dest_image_file)
-            src_mask_file = os.path.join(src_dir_masks,os.path.basename(images_in_current_folder[i]))
-            dst_mask_file = os.path.join(dst_dir_masks,os.path.basename(images_in_current_folder[i]))
-            shutil.copyfile(src_mask_file, dst_mask_file)
-
 
 
 def rgb_to_onehot(rgb_image,classes):
@@ -183,7 +62,7 @@ def onehot_to_rgb(onehot,classes):
 
 
 
-def TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5):
+def DataGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5):
     '''Train Image data generator
         Inputs: 
             seed - seed provided to the flow_from_directory function to ensure aligned data flow
@@ -223,40 +102,6 @@ def TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,seed = 1, bat
         #time.sleep(30)
 
 
-        yield X1i[0], np.asarray(mask_encoded)
-
-
-def ValAugmentGenerator(val_frames_dir,val_masks_dir,classes, seed = 1, batch_size = 5):
-    '''Validation Image data generator
-        Inputs: 
-            seed - seed provided to the flow_from_directory function to ensure aligned data flow
-            batch_size - number of images to import at a time
-        Output: Decoded RGB image (height x width x 3) 
-    '''
-    # Normalizing only frame images, since masks contain label info
-    data_gen_args = dict(rescale=1./255)
-    mask_gen_args = dict()
-
-    val_frames_datagen = ImageDataGenerator(**data_gen_args)
-    val_masks_datagen = ImageDataGenerator(**mask_gen_args)
-
-    val_image_generator = val_frames_datagen.flow_from_directory(
-    os.path.dirname(val_frames_dir),
-    batch_size = batch_size, seed = seed)
-
-
-    val_mask_generator = val_masks_datagen.flow_from_directory(
-    os.path.dirname(val_masks_dir),
-    batch_size = batch_size, seed = seed)
-
-
-    while True:
-        X1i = val_image_generator.next()
-        X2i = val_mask_generator.next()
-        
-        #One hot encoding RGB images
-        mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
-        
         yield X1i[0], np.asarray(mask_encoded)
 
 
@@ -431,45 +276,20 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     print("Device name: {}".format((x.device)))
     
     print("Tensorflow eager execution: " + str(tf.executing_eagerly()))
-    
-    #training_data_dir = os.path.join(working_dir,"training_data")
-    #mask_tiles_dir = os.path.join(training_data_dir,"masks")
-    #image_tiles_dir = os.path.join(training_data_dir,"images")
-    
+        
     
     classes = utils.load_obj(os.path.join(working_dir,"labelmap.pkl"))
 
 
     [train_frames_dir,train_masks_dir,val_frames_dir,val_masks_dir,test_frames_dir,test_masks_dir] = get_folders(working_dir)
     
-    frame_tensors, masks_tensors, frames_list, masks_list = read_images(train_frames_dir,train_masks_dir)
-
+    
     num_train_frames = len(utils.get_all_image_paths_in_folder(train_frames_dir))
     num_val_frames = len(utils.get_all_image_paths_in_folder(val_frames_dir))
 
-    
-    
+        
+    model_save_path = os.path.join(working_dir,"trained_model.h5")
 
-    
-    #split_train_dir(image_tiles_dir,mask_tiles_dir,val_frames_dir,val_masks_dir,splits)
-    #for i in range(len(splits)):
-    #    splits[i] = 1-splits[i]
-    #split_train_dir(image_tiles_dir,mask_tiles_dir,train_frames_dir,train_masks_dir,splits)
-    
-    '''
-    generator = TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,batch_size=batch_size)
-    next_im = next(generator)
-    print(next_im[1])
-    print(next_im[0])
-    print(next_im[0].shape)
-    print(next_im[0].dtype)
-    print(next_im[1].shape)
-    print(next_im[1].dtype)
-    
-    return
-    '''
-    
-    
     
     model = get_small_unet(n_filters = 32,num_classes=len(classes),batch_size=batch_size)
 
@@ -478,7 +298,6 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     #model.summary()
     #model.load_weights("model_100_epochs.h5")
     
-    model_save_path = os.path.join(working_dir,"trained_model.h5")
 
     tb = TensorBoard(log_dir=os.path.join(working_dir,"logs"), write_graph=True)
     mc = ModelCheckpoint(mode='max', filepath=model_save_path, monitor='val_acc', save_best_only='True', save_weights_only='True', verbose=1)
@@ -488,16 +307,12 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     steps_per_epoch = int(np.ceil(float(num_train_frames) / batch_size))
     validation_steps = int(np.ceil(float(num_val_frames) / batch_size))
 
-    #steps_per_epoch = np.ceil(float(len(frames_list) - round(0.1*len(frames_list))) / float(batch_size))
-    #validation_steps = np.ceil(float((round(0.1*len(frames_list)))) / float(batch_size))
-    
-    
     num_epochs = 100
         
-    result = model.fit_generator(TrainAugmentGenerator(train_frames_dir,train_masks_dir,classes,batch_size=batch_size), steps_per_epoch=int(steps_per_epoch) ,
-                    validation_data = ValAugmentGenerator(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
+    result = model.fit_generator(DataGenerator(train_frames_dir,train_masks_dir,classes,batch_size=batch_size), steps_per_epoch=int(steps_per_epoch) ,
+                    validation_data = DataGenerator(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
                     validation_steps = int(validation_steps), epochs=num_epochs, callbacks=callbacks)
-    model.save_weights(model_save_path, overwrite=True)
+    #model.save_weights(model_save_path, overwrite=True)
     
-    
-run()
+if __name__ == '__main__':
+    run()
