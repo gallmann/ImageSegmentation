@@ -28,6 +28,35 @@ class GeoInformation(object):
                 setattr(self, key, dictionary[key])
 
 
+def rgb_to_onehot(rgb_image,classes):
+    '''Function to one hot encode RGB mask labels
+        Inputs: 
+            rgb_image - image matrix (eg. 256 x 256 x 3 dimension numpy ndarray)
+            colormap - dictionary of color to label id
+        Output: One hot encoded image of dimensions (height x width x num_classes) where num_classes = len(colormap)
+    '''
+    num_classes = len(classes)
+    shape = rgb_image.shape[:2]+(num_classes,)
+    encoded_image = np.zeros( shape, dtype=np.int8 )
+    for i, cls in enumerate(classes):
+        encoded_image[:,:,i] = np.all(rgb_image.reshape( (-1,3) ) == id2color(classes,i), axis=1).reshape(shape[:2])
+    return encoded_image
+
+def onehot_to_rgb(onehot,classes):
+    '''Function to decode encoded mask labels
+        Inputs: 
+            onehot - one hot encoded image matrix (height x width x num_classes)
+            colormap - dictionary of color to label id
+        Output: Decoded RGB image (height x width x 3) 
+    '''
+    single_layer = np.argmax(onehot, axis=-1)
+    output = np.zeros( onehot.shape[:2]+(3,) )
+    for c in classes:
+        output[single_layer==name2id(classes,c)] = name2color(classes,c)
+    return np.uint8(output)
+
+
+
 def save_obj(obj, path ):
     with open(path, 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
