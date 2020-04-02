@@ -12,6 +12,8 @@ import numpy as np
 import osr
 import pyproj
 import pickle
+import constants
+from PIL import Image
 
 
 class GeoInformation(object):
@@ -190,3 +192,103 @@ def get_geo_coordinates(input_image, epsg_code=2056):
     except RuntimeError:
         return None
     
+
+
+def resize_image_and_change_coordinate_system(image_path, dst_image_path, dst_gsd=constants.ground_sampling_distance, epsg_to_work_with=constants.EPSG_TO_WORK_WITH):
+    
+    
+    gdal_image = gdal.Open(image_path)
+    width = gdal_image.RasterXSize
+    #height = gdal_image.RasterYSize
+
+    #Change Coordinate System of Image if necessary      
+    geo_coordinates = get_geo_coordinates(image_path)
+    ground_sampling_size_x = (geo_coordinates.lr_lon - geo_coordinates.ul_lon) / width
+    #ground_sampling_size_y = (geo_coordinates.ul_lat - geo_coordinates.lr_lat) / height
+    
+    dst_width = width * ground_sampling_size_x / dst_gsd
+    
+    proj = osr.SpatialReference(wkt=gdal_image.GetProjection())
+    epsg_code_of_image = proj.GetAttrValue('AUTHORITY',1)
+    
+    
+    if  abs(dst_width/width-1)>0.05:
+        #projected_image_path = os.path.join(temp_dir,os.path.basename(image_path))
+        gdal.Warp(dst_image_path,image_path,dstSRS='EPSG:'+str(epsg_to_work_with), width=dst_width)
+    
+    elif epsg_code_of_image != epsg_to_work_with:
+        gdal.Warp(dst_image_path,image_path,dstSRS='EPSG:'+str(epsg_to_work_with))
+    else:
+        shutil.copyfile(image_path,dst_image_path)
+
+
+def tile_image(image_path, output_folder, classes, src_dir_index=0, is_mask=False, tile_size=256, overlap=0):
+        
+    image_array = get_image_array(image_path)
+    height = image_array.shape[0]
+    width = image_array.shape[1]
+    image_name = os.path.basename(image_path).replace("_mask.tif","").replace(".tif","")
+        
+            
+        
+    currentx = 0
+    currenty = 0
+    while currenty < height:
+        while currentx < width:       
+            
+            cropped_array = image_array[currenty:currenty+tile_size,currentx:currentx+tile_size,:3]
+            
+            if is_mask:
+                result = np.full((tile_size,tile_size,3),name2color(classes,"Nothing"),dtype=np.uint8)
+            else:
+                result = np.full((tile_size,tile_size,3),0,dtype=np.uint8)
+            result[:cropped_array.shape[0],:cropped_array.shape[1]] = cropped_array
+                    
+              
+            tile = Image.fromarray(result)
+
+            output_image_path = os.path.join(output_folder,  image_name + "_subtile_" + "x" + str(currentx) + "_y" + str(currenty) + ".png")
+            tile.save(output_image_path,"PNG")
+                        
+            currentx += tile_size-overlap
+        currenty += tile_size-overlap
+        currentx = 0
+
+
+def save_array_as_image_with_geo_coords(dst_image_path, image_with_coords, image_array):
+    
+    fileformat = "GTiff"
+    driver = gdal.GetDriverByName(fileformat)
+    src_ds = gdal.Open(image_with_coords)
+    dst_ds = driver.CreateCopy(dst_image_path, src_ds, strict=0)
+    image_array = np.swapaxes(image_array,2,1)
+    image_array = np.swapaxes(image_array,1,0)
+    dst_ds.GetRasterBand(1).WriteArray(image_array[0], 0, 0)
+    dst_ds.GetRasterBand(2).WriteArray(image_array[1], 0, 0)
+    dst_ds.GetRasterBand(3).WriteArray(image_array[2], 0, 0)
+    dst_ds.FlushCache()  # Write to disk.    
+
+
+def save_array_as_image(image_path,image_array):
+    
+    image_array = image_array.astype(np.uint8)
+    if not image_path.endswith(".png") and not image_path.endswith(".jpg") and not image_path.endswith(".tif"):
+        print("Error! image_path has to end with .png, .jpg or .tif")
+    height = image_array.shape[0]
+    width = image_array.shape[1]
+    if height*width < Image.MAX_IMAGE_PIXELS:
+        newIm = Image.fromarray(image_array, "RGB")
+        newIm.save(image_path)
+    
+    else:
+        gdal.AllRegister()
+        driver = gdal.GetDriverByName( 'MEM' )
+        ds1 = driver.Create( '', width, height, 3, gdal.GDT_Byte)
+        ds = driver.CreateCopy(image_path, ds1, 0)
+            
+        image_array = np.swapaxes(image_array,2,1)
+        image_array = np.swapaxes(image_array,1,0)
+        ds.GetRasterBand(1).WriteArray(image_array[0], 0, 0)
+        ds.GetRasterBand(2).WriteArray(image_array[1], 0, 0)
+        ds.GetRasterBand(3).WriteArray(image_array[2], 0, 0)
+        gdal.Translate(image_path,ds, options=gdal.TranslateOptions(bandList=[1,2,3], format="png"))

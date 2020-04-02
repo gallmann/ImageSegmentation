@@ -8,8 +8,6 @@ Created on Mon Mar 23 11:35:45 2020
 import utils
 import os
 import geopandas as gpd
-import gdal
-import osr
 from shapely.geometry import Polygon, MultiPolygon, LinearRing
 from PIL import Image, ImageDraw
 import numpy as np
@@ -67,34 +65,6 @@ def get_all_polygons_from_shapefile(project_dir):
 
 
 
-
-
-def save_array_as_image(image_path,image_array):
-    
-    image_array = image_array.astype(np.uint8)
-    if not image_path.endswith(".png") and not image_path.endswith(".jpg") and not image_path.endswith(".tif"):
-        print("Error! image_path has to end with .png, .jpg or .tif")
-    height = image_array.shape[0]
-    width = image_array.shape[1]
-    if height*width < Image.MAX_IMAGE_PIXELS:
-        newIm = Image.fromarray(image_array, "RGB")
-        newIm.save(image_path)
-    
-    else:
-        gdal.AllRegister()
-        driver = gdal.GetDriverByName( 'MEM' )
-        ds1 = driver.Create( '', width, height, 3, gdal.GDT_Byte)
-        ds = driver.CreateCopy(image_path, ds1, 0)
-            
-        image_array = np.swapaxes(image_array,2,1)
-        image_array = np.swapaxes(image_array,1,0)
-        ds.GetRasterBand(1).WriteArray(image_array[0], 0, 0)
-        ds.GetRasterBand(2).WriteArray(image_array[1], 0, 0)
-        ds.GetRasterBand(3).WriteArray(image_array[2], 0, 0)
-        gdal.Translate(image_path,ds, options=gdal.TranslateOptions(bandList=[1,2,3], format="png"))
-
-
-
 def make_mask_image(image_path, mask_image_path, all_polygons, save_with_geo_coordinates = False):
     
     outer_polygons = []
@@ -124,23 +94,11 @@ def make_mask_image(image_path, mask_image_path, all_polygons, save_with_geo_coo
     
     
     if save_with_geo_coordinates:
-        save_array_as_image_with_geo_coords(mask_image_path,image_path,mask)
+        utils.save_array_as_image_with_geo_coords(mask_image_path,image_path,mask)
     else:
-        save_array_as_image(mask_image_path, mask)
+        utils.save_array_as_image(mask_image_path, mask)
 
 
-def save_array_as_image_with_geo_coords(dst_image_path, image_with_coords, image_array):
-    
-    fileformat = "GTiff"
-    driver = gdal.GetDriverByName(fileformat)
-    src_ds = gdal.Open(image_with_coords)
-    dst_ds = driver.CreateCopy(dst_image_path, src_ds, strict=0)
-    image_array = np.swapaxes(image_array,2,1)
-    image_array = np.swapaxes(image_array,1,0)
-    dst_ds.GetRasterBand(1).WriteArray(image_array[0], 0, 0)
-    dst_ds.GetRasterBand(2).WriteArray(image_array[1], 0, 0)
-    dst_ds.GetRasterBand(3).WriteArray(image_array[2], 0, 0)
-    dst_ds.FlushCache()  # Write to disk.    
 
 
 
@@ -174,40 +132,6 @@ def convert_polygon_coords_to_pixel_coords(all_polygons, image_path):
     return result_polygons
 
 
-
-
-def tile_image(image_path, output_folder,src_dir_index, is_mask=False, tile_size=256, overlap=0):
-        
-    image_array = utils.get_image_array(image_path)
-    height = image_array.shape[0]
-    width = image_array.shape[1]
-    image_name = os.path.basename(image_path).replace("_mask.tif","").replace(".tif","")
-        
-            
-        
-    currentx = 0
-    currenty = 0
-    while currenty < height:
-        while currentx < width:       
-            
-            cropped_array = image_array[currenty:currenty+tile_size,currentx:currentx+tile_size,:3]
-            
-            if is_mask:
-                result = np.full((tile_size,tile_size,3),utils.name2color(classes,"Nothing"),dtype=np.uint8)
-            else:
-                result = np.full((tile_size,tile_size,3),0,dtype=np.uint8)
-            result[:cropped_array.shape[0],:cropped_array.shape[1]] = cropped_array
-                    
-              
-            tile = Image.fromarray(result)
-
-            output_image_path = os.path.join(output_folder,  image_name + "_subtile_" + "x" + str(currentx) + "_y" + str(currenty) + ".png")
-            tile.save(output_image_path,"PNG")
-                        
-            currentx += tile_size-overlap
-        currenty += tile_size-overlap
-        currentx = 0
-    
     
 
 def add_shapefile_classes_to_label_dictionary(shape_file_path):
@@ -236,34 +160,6 @@ def make_folders(project_dir):
     os.makedirs(image_tiles_dir,exist_ok=True)
         
     return (temp_dir,mask_tiles_dir,image_tiles_dir)
-
-
-def resize_image_and_change_coordinate_system(image_path, dst_image_path, dst_gsd=constants.ground_sampling_distance):
-    
-    
-    gdal_image = gdal.Open(image_path)
-    width = gdal_image.RasterXSize
-    #height = gdal_image.RasterYSize
-
-    #Change Coordinate System of Image if necessary      
-    geo_coordinates = utils.get_geo_coordinates(image_path)
-    ground_sampling_size_x = (geo_coordinates.lr_lon - geo_coordinates.ul_lon) / width
-    #ground_sampling_size_y = (geo_coordinates.ul_lat - geo_coordinates.lr_lat) / height
-    
-    dst_width = width * ground_sampling_size_x / dst_gsd
-    
-    proj = osr.SpatialReference(wkt=gdal_image.GetProjection())
-    epsg_code_of_image = proj.GetAttrValue('AUTHORITY',1)
-    
-    
-    if  abs(dst_width/width-1)>0.05:
-        #projected_image_path = os.path.join(temp_dir,os.path.basename(image_path))
-        gdal.Warp(dst_image_path,image_path,dstSRS='EPSG:'+str(EPSG_TO_WORK_WITH), width=dst_width)
-    
-    elif epsg_code_of_image != EPSG_TO_WORK_WITH:
-        gdal.Warp(dst_image_path,image_path,dstSRS='EPSG:'+str(EPSG_TO_WORK_WITH))
-    else:
-        shutil.copyfile(image_path,dst_image_path)
 
 
 
@@ -295,7 +191,7 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
             
             
             projected_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
-            resize_image_and_change_coordinate_system(image_path,projected_image_path)
+            utils.resize_image_and_change_coordinate_system(image_path,projected_image_path)
             image_path = projected_image_path
             
             mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
@@ -304,8 +200,8 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
                 
             make_mask_image(image_path,mask_image_path,all_polygons)
             
-            tile_image(mask_image_path,mask_tiles_dir,src_dir_index, is_mask= True)
-            tile_image(image_path,image_tiles_dir,src_dir_index)
+            utils.tile_image(mask_image_path,mask_tiles_dir,classes, src_dir_index=src_dir_index, is_mask= True)
+            utils.tile_image(image_path,image_tiles_dir,classes, src_dir_index=src_dir_index)
 
             
 
