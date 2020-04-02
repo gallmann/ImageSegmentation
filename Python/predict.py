@@ -6,88 +6,18 @@ Created on Sun Mar 29 13:22:42 2020
 """
 
 
-import train
 import constants
 import utils
 import os
 import numpy as np
-import matplotlib.pyplot as plt
 import progressbar
 import gdal
+import unet_utils
 
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from PIL import Image
 import tensorflow as tf
 tf.enable_eager_execution()
-
-
-
-
-
-def DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5):
-    '''Train Image data generator
-        Inputs: 
-            seed - seed provided to the flow_from_directory function to ensure aligned data flow
-            batch_size - number of images to import at a time
-        Output: Decoded RGB image (height x width x 3) 
-    '''
-    
-    
-    # Normalizing only frame images, since masks contain label info
-    data_gen_args = dict(rescale=1./255)
-    mask_gen_args = dict()
-    
-    
-    train_frames_datagen = ImageDataGenerator(**data_gen_args)
-    train_masks_datagen = ImageDataGenerator(**mask_gen_args)
-    
-    train_image_generator = train_frames_datagen.flow_from_directory(
-    os.path.dirname(train_frames_dir),
-    batch_size = batch_size, seed = seed)
-
-    train_mask_generator = train_masks_datagen.flow_from_directory(
-    os.path.dirname(train_masks_dir),
-    batch_size = batch_size, seed = seed)
-
-    while True:
-        X1i = train_image_generator.next()
-        X2i = train_mask_generator.next()
-        
-        #One hot encoding RGB images
-        mask_encoded = [utils.rgb_to_onehot(X2i[0][x,:,:,:], classes) for x in range(X2i[0].shape[0])]
-        
-        yield X1i[0], np.asarray(mask_encoded)
-
-
-
-def DataGenerator(train_frames_dir,classes,seed = 1, batch_size = 5):
-    '''Train Image data generator
-        Inputs: 
-            seed - seed provided to the flow_from_directory function to ensure aligned data flow
-            batch_size - number of images to import at a time
-        Output: Decoded RGB image (height x width x 3) 
-    '''
-    
-    
-    # Normalizing only frame images, since masks contain label info
-    data_gen_args = dict(rescale=1./255)
-    
-    
-    train_frames_datagen = ImageDataGenerator(**data_gen_args)
-    
-    train_image_generator = train_frames_datagen.flow_from_directory(
-    os.path.dirname(train_frames_dir),
-    batch_size = batch_size, seed = seed, shuffle = False)
-    
-    filenames = train_image_generator.filenames
-    
-    batch_index = 0
-    
-    while True:   
-        
-        yield train_image_generator.next()[0],filenames[batch_index:(batch_index+batch_size)%(len(filenames)+1)]
-        batch_index += batch_size
-
 
 
 
@@ -182,14 +112,14 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
     
     #print(len(classes))
     
-    model = train.get_small_unet(n_filters = 32,num_classes=len(classes),batch_size=batch_size)
-    model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=[train.tversky_loss,train.dice_coef,'accuracy'])
+    model = unet_utils.get_small_unet(n_filters = 32,num_classes=len(classes),batch_size=batch_size)
+    model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=[unet_utils.tversky_loss,unet_utils.dice_coef,'accuracy'])
     #model.summary()
     
     model_save_path = os.path.join(working_dir,"trained_model.h5")
 
     model.load_weights(model_save_path)
-    data_generator = DataGenerator(tiles_dir,classes,batch_size=batch_size)
+    data_generator = unet_utils.DataGeneratorWithFilenames(tiles_dir,classes,batch_size=batch_size)
     
     num_batches = int(np.ceil(float(len(all_tile_paths)) / float(batch_size)))
     tile_index = 0
