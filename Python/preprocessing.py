@@ -183,7 +183,7 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
         
         images_folder = os.path.join(src_dir,"images")
         
-        print("Generating masks for all images in input folder: " + src_dir)
+        print("Generating masks for all images in input folder: " + src_dir,flush=True)
         
         
 
@@ -209,11 +209,13 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
             
         utils.delete_folder_contents(temp_dir)
     shutil.rmtree(temp_dir)
-    print("Splitting all training tiles and masks into train, validation and test sets...")
+    print("Splitting all training tiles and masks into train, validation and test sets...",flush=True)
     split_dataset.split_into_train_val_and_test_sets(working_dir)
     
 if __name__ == '__main__':
-    run()
+    src_dirs=constants.data_source_folders
+    working_dir=constants.working_dir
+    run(src_dirs,working_dir)
 
 
 

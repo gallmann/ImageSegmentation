@@ -36,7 +36,7 @@ def get_folders(working_dir):
     return full_folder_paths
 
 
-def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
+def train(working_dir=constants.working_dir, batch_size=constants.batch_size):
     x = tf.random.uniform([3, 3])
 
     print("Is there a GPU available: "),
@@ -91,4 +91,7 @@ def run(working_dir=constants.working_dir, batch_size=constants.batch_size):
     
     
 if __name__ == '__main__':
-    run()
+    working_dir=constants.working_dir
+    batch_size=constants.batch_size
+    
+    train(working_dir,batch_size)

@@ -119,7 +119,7 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
     model_save_path = os.path.join(working_dir,"trained_model.h5")
 
     model.load_weights(model_save_path)
-    data_generator = unet_utils.DataGeneratorWithFilenames(tiles_dir,classes,batch_size=batch_size)
+    data_generator = unet_utils.DataGeneratorWithFileNames(tiles_dir,classes,batch_size=batch_size)
     
     num_batches = int(np.ceil(float(len(all_tile_paths)) / float(batch_size)))
     tile_index = 0
@@ -153,9 +153,9 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
 
 
     
-    print("Reassembling tiles Tiles...")
+    print("Reassembling Tiles...")
     for image_path in progressbar.progressbar(images_to_predict):
-        dst_image_path = os.path.join(output_folder, os.path.basename(image_path))
+        dst_image_path = os.path.join(output_folder, os.path.basename(image_path)
         reassemble(image_path,dst_image_path,pred_tiles_dir)
         
     print("Cleaning up...")
@@ -175,4 +175,4 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
 
         
 if __name__ == '__main__':
-    run("C:/Users/johan/Desktop/src_folder2/images","C:/Users/johan/Desktop/test")
+    run(constants.folder_with_images_to_predict,constants.predictions_output_folder)

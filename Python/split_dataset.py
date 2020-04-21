@@ -60,7 +60,7 @@ def make_folders(project_dir):
 
 def split_into_train_val_and_test_sets(working_dir):
         
-    print("Preparing folders...")
+    print("Preparing folders...",flush=True)
     [train_frames_dir,train_masks_dir,val_frames_dir,val_masks_dir,test_frames_dir,test_masks_dir] = make_folders(working_dir)
     
     training_data_dir = os.path.join(working_dir,"training_data")
@@ -68,17 +68,17 @@ def split_into_train_val_and_test_sets(working_dir):
 
     [train_image_paths,val_image_paths,test_image_paths] = get_data_sets(image_tiles_dir)
     
-    print("Copying training images...")
+    print("Copying training images...",flush=True)
     for image_path in progressbar.progressbar(train_image_paths):
         shutil.copyfile(image_path,os.path.join(train_frames_dir,os.path.basename(image_path)))
         shutil.copyfile(image_path.replace("images","masks"),os.path.join(train_masks_dir,os.path.basename(image_path)))
     
-    print("Copying validation images...")
+    print("Copying validation images...",flush=True)
     for image_path in progressbar.progressbar(val_image_paths):
         shutil.copyfile(image_path,os.path.join(val_frames_dir,os.path.basename(image_path)))
         shutil.copyfile(image_path.replace("images","masks"),os.path.join(val_masks_dir,os.path.basename(image_path)))
 
-    print("Copying testing images...")
+    print("Copying testing images...",flush=True)
     for image_path in progressbar.progressbar(test_image_paths):
         shutil.copyfile(image_path,os.path.join(test_frames_dir,os.path.basename(image_path)))
         shutil.copyfile(image_path.replace("images","masks"),os.path.join(test_masks_dir,os.path.basename(image_path)))
