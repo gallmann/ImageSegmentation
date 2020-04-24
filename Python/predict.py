@@ -116,8 +116,8 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
     model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=[unet_utils.tversky_loss,unet_utils.dice_coef,'accuracy'])
     #model.summary()
     
-    model_save_path = os.path.join(working_dir,"trained_model.h5")
-
+    model_save_path = constants.trained_model
+    
     model.load_weights(model_save_path)
     data_generator = unet_utils.DataGeneratorWithFileNames(tiles_dir,classes,batch_size=batch_size)
     

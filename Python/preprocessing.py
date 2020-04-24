@@ -21,7 +21,32 @@ EPSG_TO_WORK_WITH = constants.EPSG_TO_WORK_WITH
 classes = ["Background", "Nothing"]
 
 
-def get_all_polygons_from_shapefile(project_dir):
+def get_polygons_from_shapely_geometry(shapely_row):
+    
+    all_polygons = []
+    
+    if type(shapely_row["geometry"]) is Polygon:
+            
+                        
+        
+        
+        #TODO: interior
+        all_polygons.append({"class_label": row[classification_class], "polygon": list(row["geometry"].exterior.coords), "interior_polygons":[]})
+        
+    elif type(row["geometry"]) is LinearRing:
+        all_polygons.append({"class_label": row[classification_class], "polygon": list(row["geometry"].coords), "interior_polygons":[]})
+    elif type(row["geometry"]) is MultiPolygon:
+        for polygon in row["geometry"]:
+            #TODO: interior
+            all_polygons.append({"class_label": row[classification_class], "polygon": list(polygon.exterior.coords), "interior_polygons":[]})
+
+    else:
+        print("Unknown geometry type in input shape file ignored...")
+
+    
+    
+
+def get_all_polygons_from_shapefile(project_dir,classification_class = constants.classification_class):
     
     gdf = gpd.read_file(project_dir)
     gdf = gdf[gdf.geometry.notnull()]
@@ -36,28 +61,34 @@ def get_all_polygons_from_shapefile(project_dir):
         
         if type(row["geometry"]) is Polygon:
             
-            
             '''
-            #print(list(row["geometry"].exterior.coords))
             try:
-                print(list(row["geometry"].interiors[0].coords))
+                #print(list(row["geometry"].interiors[0].coords))
+                #print(type(row["geometry"].interiors[0]))
+                print("geometry: " + str(row["geometry"].interiors[0]))
             except:
-                print("Exc")
+                a = 0
+                #print("Exc")
             '''
             
-            #TODO: interior
-            all_polygons.append({"class_label": row["NUTZUNG"], "polygon": list(row["geometry"].exterior.coords), "interior_polygons":[]})
+            
+            interiors = []
+            for interior in row["geometry"].interiors:
+                interiors.append(list(interior.coords))
+            all_polygons.append({"class_label": row[classification_class], "polygon": list(row["geometry"].exterior.coords), "interior_polygons":interiors})
+            
             
         elif type(row["geometry"]) is LinearRing:
-            all_polygons.append({"class_label": row["NUTZUNG"], "polygon": list(row["geometry"].coords), "interior_polygons":[]})
+            all_polygons.append({"class_label": row[classification_class], "polygon": list(row["geometry"].coords), "interior_polygons":[]})
         elif type(row["geometry"]) is MultiPolygon:
             for polygon in row["geometry"]:
-                #TODO: interior
-                all_polygons.append({"class_label": row["NUTZUNG"], "polygon": list(polygon.exterior.coords), "interior_polygons":[]})
+                interiors = []
+                for interior in polygon.interiors:
+                    interiors.append(list(interior.coords))
+                all_polygons.append({"class_label": row[classification_class], "polygon": list(polygon.exterior.coords), "interior_polygons":interiors})
 
         else:
             print("Unknown geometry type in input shape file ignored...")
-    
     return all_polygons
 
 
@@ -80,7 +111,10 @@ def make_mask_image(image_path, mask_image_path, all_polygons, save_with_geo_coo
     for polygon in all_polygons:
         color = utils.name2color(classes,polygon["class_label"])
         ImageDraw.Draw(mask_img).polygon(polygon["polygon"], outline=color, fill=color)
-        #TODO: Inner polygon
+        for interior_polygon in polygon["interior_polygons"]:
+            color = utils.name2color(classes,"Background")
+            ImageDraw.Draw(mask_img).polygon(interior_polygon, outline=color, fill=color)
+
 
     mask = np.array(mask_img)
     
@@ -126,7 +160,11 @@ def convert_polygon_coords_to_pixel_coords(all_polygons, image_path):
         for index,coords in enumerate(polygon["polygon"]):
             pixel_coords = convert_coordinates_to_pixel_coordinates(coords,width,height,target_geo_coords)
             polygon["polygon"][index] = pixel_coords
-        #TODO: Inner polygons
+        for polygon_index,interior_polygon in enumerate(polygon["interior_polygons"]):
+            for inner_coord_index, inner_coords in enumerate(interior_polygon):
+                inner_pixel_coords = convert_coordinates_to_pixel_coordinates(inner_coords,width,height,target_geo_coords)
+                polygon["interior_polygons"][polygon_index][inner_coord_index] = inner_pixel_coords
+
         result_polygons.append(polygon)
 
     return result_polygons
