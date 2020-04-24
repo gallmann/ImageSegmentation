@@ -14,8 +14,7 @@ import progressbar
 import gdal
 import unet_utils
 
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from PIL import Image
+from PIL import Image, ImageDraw
 import tensorflow as tf
 tf.enable_eager_execution()
 
@@ -90,18 +89,37 @@ def make_folders(working_dir):
     return [temp_dir, tiles_dir, pred_tiles_dir]
 
 
+def create_color_legend(classes,save_path):
+    
+    class_height = 50
+    
+    
+    image = Image.new("RGB", (600,len(classes) * class_height), (255,255,255))
+
+    for i,clazz in enumerate(classes):
+        
+        color = utils.name2color(classes,clazz)
+        color_polygon = [(10,i*class_height + 10),(40,i*class_height+10),(40,i*class_height+40),(10,i*class_height+40)]
+        ImageDraw.Draw(image).polygon(color_polygon, outline=color, fill=color)
+        ImageDraw.Draw(image).text((50,i*class_height+25), clazz + " " + str(color), fill=color)
+
+    image.save(save_path)
+
+
 def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_size = constants.batch_size):
 
     
     [temp_dir, tiles_dir, pred_tiles_dir] = make_folders(working_dir)
-    classes = utils.load_obj(os.path.join(working_dir,"labelmap.pkl"))
+    classes = utils.load_obj(constants.label_map)
+    
+    create_color_legend(classes, os.path.join(output_folder,"color_legend.png"))
 
-    print("Preparing image tiles...")
+    print("Preparing image tiles...",flush=True)
     images_to_predict = utils.get_all_image_paths_in_folder(predict_folder)
     for image_path in progressbar.progressbar(images_to_predict):
         utils.tile_image(image_path, tiles_dir, classes, tile_size=256, overlap=0)
     
-    print("Loading Trained Model...")
+    print("Loading Trained Model...",flush=True)
     
     all_tile_paths = utils.get_all_image_paths_in_folder(tiles_dir)
 
@@ -124,11 +142,10 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
     num_batches = int(np.ceil(float(len(all_tile_paths)) / float(batch_size)))
     tile_index = 0
     
-    print("Predicting Tiles...")
+    print("Predicting Tiles...",flush=True)
     for batch_number in progressbar.progressbar(range(0,num_batches)):
         img_batch,filenames=next(data_generator)
         pred_all= model.predict(img_batch)
-        
         #pred = model.predict_generator(data_generator,steps=64)
         #reassemble(image_path,mask_path,pred,classes)
         for i in range(0,np.shape(pred_all)[0]):
@@ -153,12 +170,12 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
 
 
     
-    print("Reassembling Tiles...")
+    print("Reassembling Tiles...",flush=True)
     for image_path in progressbar.progressbar(images_to_predict):
-        dst_image_path = os.path.join(output_folder, os.path.basename(image_path)
+        dst_image_path = os.path.join(output_folder, os.path.basename(image_path))
         reassemble(image_path,dst_image_path,pred_tiles_dir)
         
-    print("Cleaning up...")
+    print("Cleaning up...",flush=True)
     utils.delete_folder_contents(temp_dir)
 
 

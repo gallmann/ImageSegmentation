@@ -34,7 +34,7 @@ def run(working_dir=constants.working_dir, batch_size = constants.batch_size, pe
     
     [test_tiles_dir,test_masks_dir] = get_folders(working_dir)
     
-    classes = utils.load_obj(os.path.join(working_dir,"labelmap.pkl"))
+    classes = utils.load_obj(constants.label_map)
     print(classes)
 
     model = unet_utils.get_small_unet(n_filters = 32,num_classes=len(classes),batch_size=batch_size)

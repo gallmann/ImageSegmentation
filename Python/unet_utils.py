@@ -46,8 +46,10 @@ def DataGeneratorWithFileNames(train_frames_dir,classes,seed = 1, batch_size = 5
     batch_index = 0
     
     while True:   
-        
-        yield train_image_generator.next()[0],filenames[batch_index:(batch_index+batch_size)%(len(filenames)+1)]
+        next_filenames = filenames[batch_index:min((batch_index+batch_size),len(filenames))]
+        next_filenames += ['0/nothing.png'] * (batch_size - len(next_filenames))
+
+        yield train_image_generator.next()[0],next_filenames
         batch_index += batch_size
 
 

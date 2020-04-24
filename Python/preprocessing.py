@@ -20,30 +20,6 @@ EPSG_TO_WORK_WITH = constants.EPSG_TO_WORK_WITH
 
 classes = ["Background", "Nothing"]
 
-
-def get_polygons_from_shapely_geometry(shapely_row):
-    
-    all_polygons = []
-    
-    if type(shapely_row["geometry"]) is Polygon:
-            
-                        
-        
-        
-        #TODO: interior
-        all_polygons.append({"class_label": row[classification_class], "polygon": list(row["geometry"].exterior.coords), "interior_polygons":[]})
-        
-    elif type(row["geometry"]) is LinearRing:
-        all_polygons.append({"class_label": row[classification_class], "polygon": list(row["geometry"].coords), "interior_polygons":[]})
-    elif type(row["geometry"]) is MultiPolygon:
-        for polygon in row["geometry"]:
-            #TODO: interior
-            all_polygons.append({"class_label": row[classification_class], "polygon": list(polygon.exterior.coords), "interior_polygons":[]})
-
-    else:
-        print("Unknown geometry type in input shape file ignored...")
-
-    
     
 
 def get_all_polygons_from_shapefile(project_dir,classification_class = constants.classification_class):
