@@ -217,7 +217,16 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
             utils.tile_image(mask_image_path,mask_tiles_dir,classes, src_dir_index=src_dir_index, is_mask= True)
             utils.tile_image(image_path,image_tiles_dir,classes, src_dir_index=src_dir_index)
 
-            
+        
+        if constants.only_use_area_within_shapefile_polygons[src_dir_index]:
+            for mask_tile,image_tile in zip(utils.get_all_image_paths_in_folder(mask_tiles_dir),utils.get_all_image_paths_in_folder(image_tiles_dir)):
+                if "srcdir" + str(src_dir_index) in mask_tile:
+                    colors = Image.open(mask_tile).getcolors()
+                    for color in colors:
+                        if utils.name2color(classes,"Background") == color[1]:
+                            print("Background present")
+                            os.remove(mask_tile)
+                            os.remove(image_tile)
 
 
             
