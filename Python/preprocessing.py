@@ -187,6 +187,8 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
     
     utils.save_obj(classes,os.path.join(working_dir,"labelmap.pkl"))
     
+    utils.create_color_legend(classes, os.path.join(working_dir,"color_legend.png"))
+
     
     (temp_dir,mask_tiles_dir,image_tiles_dir) = make_folders(working_dir)
 

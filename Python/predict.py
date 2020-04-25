@@ -14,7 +14,7 @@ import progressbar
 import gdal
 import unet_utils
 
-from PIL import Image, ImageDraw
+from PIL import Image
 import tensorflow as tf
 tf.enable_eager_execution()
 
@@ -89,21 +89,6 @@ def make_folders(working_dir):
     return [temp_dir, tiles_dir, pred_tiles_dir]
 
 
-def create_color_legend(classes,save_path):
-    
-    class_height = 50
-    
-    
-    image = Image.new("RGB", (600,len(classes) * class_height), (255,255,255))
-
-    for i,clazz in enumerate(classes):
-        
-        color = utils.name2color(classes,clazz)
-        color_polygon = [(10,i*class_height + 10),(40,i*class_height+10),(40,i*class_height+40),(10,i*class_height+40)]
-        ImageDraw.Draw(image).polygon(color_polygon, outline=color, fill=color)
-        ImageDraw.Draw(image).text((50,i*class_height+25), clazz + " " + str(color), fill=color)
-
-    image.save(save_path)
 
 
 def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_size = constants.batch_size):
@@ -112,7 +97,7 @@ def run(predict_folder,output_folder, working_dir=constants.working_dir, batch_s
     [temp_dir, tiles_dir, pred_tiles_dir] = make_folders(working_dir)
     classes = utils.load_obj(constants.label_map)
     
-    create_color_legend(classes, os.path.join(output_folder,"color_legend.png"))
+    utils.create_color_legend(classes, os.path.join(output_folder,"color_legend.png"))
 
     print("Preparing image tiles...",flush=True)
     images_to_predict = utils.get_all_image_paths_in_folder(predict_folder)

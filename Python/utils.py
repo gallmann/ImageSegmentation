@@ -13,7 +13,7 @@ import osr
 import pyproj
 import pickle
 import constants
-from PIL import Image
+from PIL import Image, ImageDraw
 
 
 class GeoInformation(object):
@@ -27,6 +27,23 @@ class GeoInformation(object):
             for key in dictionary:
                 setattr(self, key, dictionary[key])
 
+
+
+def create_color_legend(classes,save_path):
+    
+    class_height = 50
+    
+    
+    image = Image.new("RGB", (600,len(classes) * class_height), (255,255,255))
+
+    for i,clazz in enumerate(classes):
+        
+        color = name2color(classes,clazz)
+        color_polygon = [(10,i*class_height + 10),(40,i*class_height+10),(40,i*class_height+40),(10,i*class_height+40)]
+        ImageDraw.Draw(image).polygon(color_polygon, outline=color, fill=color)
+        ImageDraw.Draw(image).text((50,i*class_height+25), clazz + " " + str(color), fill=color)
+
+    image.save(save_path)
 
 def rgb_to_onehot(rgb_image,classes):
     '''Function to one hot encode RGB mask labels
