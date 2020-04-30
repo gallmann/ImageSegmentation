@@ -90,7 +90,7 @@ def train(working_dir=constants.working_dir, batch_size=constants.batch_size):
     
     
     
-    result = model.fit_generator(unet_utils.DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,batch_size=batch_size), steps_per_epoch=int(steps_per_epoch) ,
+    result = model.fit_generator(unet_utils.DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,batch_size=batch_size,data_augmentation=constants.data_augmentation), steps_per_epoch=int(steps_per_epoch) ,
                     validation_data = unet_utils.DataGeneratorWithMasks(val_frames_dir,val_masks_dir,classes,batch_size=batch_size), 
                     validation_steps = int(validation_steps), epochs=num_epochs, callbacks=callbacks)
     

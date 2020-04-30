@@ -20,6 +20,7 @@ import tensorflow.keras.backend as K
 import os
 import numpy as np
 import utils
+import random
 
 
 def DataGeneratorWithFileNames(train_frames_dir,classes,seed = 1, batch_size = 5):
@@ -53,10 +54,22 @@ def DataGeneratorWithFileNames(train_frames_dir,classes,seed = 1, batch_size = 5
         batch_index += batch_size
 
 
-def DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5):
+def DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,seed = 1, batch_size = 5, data_augmentation=False):
     # Normalizing only frame images, since masks contain label info
-    data_gen_args = dict(rescale=1./255)
-    mask_gen_args = dict()
+    
+    if data_augmentation:
+        seed = random.randint(0,1000)
+        data_gen_args = dict(rescale=1./255,
+                             horizontal_flip=True,
+                             vertical_flip=True,
+                             brightness_range=[0.8,1.2])
+        mask_gen_args = dict(horizontal_flip=True,
+                             vertical_flip=True)
+
+    else:
+        data_gen_args = dict(rescale=1./255)
+
+        mask_gen_args = dict()
     
     train_frames_datagen = ImageDataGenerator(**data_gen_args)
     train_masks_datagen = ImageDataGenerator(**mask_gen_args)
@@ -68,8 +81,11 @@ def DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,seed = 1, ba
     train_mask_generator = train_masks_datagen.flow_from_directory(
     os.path.dirname(train_masks_dir),
     batch_size = batch_size, seed = seed)
+    
+    batch_number = 0
 
     while True:
+        batch_number += 1
         batch = np.zeros((batch_size,256,256,3))
         batch_mask = np.zeros((batch_size,256,256,3))
         
@@ -82,7 +98,13 @@ def DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,seed = 1, ba
         
         #One hot encoding RGB images
         mask_encoded = [utils.rgb_to_onehot(batch_mask[x,:,:,:], classes) for x in range(batch_mask.shape[0])]
-        
+        '''
+        for j in range(0,np.shape(batch)[0]):
+            imag = batch[j] *255
+            utils.save_array_as_image(os.path.join("G:/Johannes/Semantic segmentation/data_aug","batch" + str(batch_number) + "_" + str(j)+".png"),imag)
+            mas = utils.onehot_to_rgb(mask_encoded[j],classes)
+            utils.save_array_as_image(os.path.join("G:/Johannes/Semantic segmentation/data_aug","batch" + str(batch_number) + "_" + str(j)+"_mask.png"),mas)
+        '''
         yield batch, np.asarray(mask_encoded)
 
 
