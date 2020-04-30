@@ -22,7 +22,7 @@ def get_folders(working_dir):
 
     test_tiles_dir = os.path.join(training_data_dir,"test_frames/0")
     os.makedirs(test_tiles_dir,exist_ok=True)
-
+    
     test_masks_dir = os.path.join(training_data_dir,"test_masks/0")
     os.makedirs(test_masks_dir,exist_ok=True)
     
@@ -83,19 +83,52 @@ def run(working_dir=constants.working_dir, batch_size = constants.batch_size, pe
         y_pred[curr_y_index:next_y_index] = np.argmax(pred,axis=3).flatten()
         
         
-    print("Computing per class statistics...",flush=True)
-    print(classification_report(y, y_pred,labels=range(0,len(classes)),target_names=classes))
-    
-    
-    print("Computing per class confusion matrix...",flush=True)
-    conf_matrix = confusion_matrix(y, y_pred,labels=range(0,len(classes)),normalize="true")*100
-    np.set_printoptions(precision=1,suppress=True)
-    
-    pd.set_option('display.max_columns', None)
+    log_folder = os.path.join(working_dir,"logs")
+    os.makedirs(log_folder,exist_ok=True)
+    evaluate_log_file_path = os.path.join(log_folder,'evaluate_log.txt')
+    with open(evaluate_log_file_path, "w") as text_file:
 
-    df = pd.DataFrame(conf_matrix, columns=classes, index=classes)
-    df = df.round(1)
-    print(df)
+        
+        
+        print("Computing per class statistics...",flush=True)
+        per_class_stats = classification_report(y, y_pred,labels=range(0,len(classes)),target_names=classes)
+        print(per_class_stats)
+        text_file.write("Per class stats:\n")
+        text_file.write(str(per_class_stats))
+        
+        
+    
+    
+    
+    
+        print("Computing per class confusion matrix...",flush=True)
+        
+        conf_matrix = confusion_matrix(y, y_pred,labels=range(0,len(classes)))
+        np.set_printoptions(precision=1,suppress=True)
+        
+        pd.set_option('display.max_columns', None)
+    
+        df = pd.DataFrame(conf_matrix, columns=classes, index=classes)
+        df = df.round(1)
+        print(df)
+
+        text_file.write("\n\nConfusion Matrix Absolute:\n")
+        text_file.write(str(df))
+        
+        
+        
+        
+        conf_matrix = confusion_matrix(y, y_pred,labels=range(0,len(classes)),normalize="true")*100
+        np.set_printoptions(precision=1,suppress=True)
+        
+        pd.set_option('display.max_columns', None)
+    
+        df = pd.DataFrame(conf_matrix, columns=classes, index=classes)
+        df = df.round(1)
+        print(df)
+
+        text_file.write("\n\nConfusion Matrix Normalized:\n")
+        text_file.write(str(df))
 
 
     

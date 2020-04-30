@@ -12,6 +12,8 @@ import constants
 import utils
 import numpy as np
 import unet_utils
+from keras.callbacks import CSVLogger
+
 
 
 
@@ -70,17 +72,22 @@ def train(working_dir=constants.working_dir, batch_size=constants.batch_size):
     #model.summary()
     #model.load_weights("model_100_epochs.h5")
     
+    log_folder = os.path.join(working_dir,"logs")
+    os.makedirs(log_folder,exist_ok=True)
+    train_log_file_path = os.path.join(log_folder,'train_log.csv')
+    csv_logger = CSVLogger(train_log_file_path, append=True, separator=';')
 
     tb = TensorBoard(log_dir=os.path.join(working_dir,"logs"), write_graph=True)
     mc = ModelCheckpoint(mode='max', filepath=model_save_path, monitor='val_acc', save_best_only='True', save_weights_only='True', verbose=1)
     es = EarlyStopping(mode='max', monitor='val_acc', patience=10, verbose=1)
-    callbacks = [tb, mc, es]
+    callbacks = [tb, mc, es, csv_logger]
     
     
     steps_per_epoch = int(np.ceil(float(num_train_frames) / batch_size))
     validation_steps = int(np.ceil(float(num_val_frames) / batch_size))
 
     num_epochs = 100
+    
     
     
     result = model.fit_generator(unet_utils.DataGeneratorWithMasks(train_frames_dir,train_masks_dir,classes,batch_size=batch_size), steps_per_epoch=int(steps_per_epoch) ,

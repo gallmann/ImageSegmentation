@@ -226,7 +226,6 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
                     colors = Image.open(mask_tile).getcolors()
                     for color in colors:
                         if utils.name2color(classes,"Background") == color[1]:
-                            print("Background present")
                             os.remove(mask_tile)
                             os.remove(image_tile)
 
