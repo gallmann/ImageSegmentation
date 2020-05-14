@@ -14,7 +14,7 @@ import pyproj
 import pickle
 import constants
 from PIL import Image, ImageDraw
-
+import json
 
 class GeoInformation(object):
     def __init__(self,dictionary=None):
@@ -318,7 +318,8 @@ def save_array_as_image_with_geo_coords(dst_image_path, image_with_coords, image
 def save_array_as_image(image_path,image_array):
     
     image_array = image_array.astype(np.uint8)
-    if not image_path.endswith(".png") and not image_path.endswith(".jpg") and not image_path.endswith(".tif"):
+    if not image_path.lower().endswith(".png") and not image_path.lower().endswith(".jpg") and not image_path.lower().endswith(".tif"):
+        print(image_path)
         print("Error! image_path has to end with .png, .jpg or .tif")
     height = image_array.shape[0]
     width = image_array.shape[1]
@@ -338,3 +339,30 @@ def save_array_as_image(image_path,image_array):
         ds.GetRasterBand(2).WriteArray(image_array[1], 0, 0)
         ds.GetRasterBand(3).WriteArray(image_array[2], 0, 0)
         gdal.Translate(image_path,ds, options=gdal.TranslateOptions(bandList=[1,2,3], format="png"))
+
+
+def get_annotations_from_labelme_file(labelme_file):
+    """Reads the annotations from a LabelMe annotation file (imagename.json)
+
+    Parameters:
+        labelme_file (str): path to the labelme annotation file
+    
+    Returns:
+        list: a list containing all annotations corresponding to that image.
+    """
+
+    with open(labelme_file, 'r') as f:
+        jsondata = json.load(f)
+    
+    annotations=[]
+    
+    for annotation in jsondata["shapes"]:
+        result_annotation = {}
+        result_annotation["name"] = annotation["label"]
+        polygon = []
+        for point in annotation["points"]:
+            polygon.append((point[0],point[1]))
+        result_annotation["polygon"] = polygon
+        annotations.append(result_annotation)
+        
+    return annotations

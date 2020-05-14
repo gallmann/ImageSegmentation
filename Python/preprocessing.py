@@ -21,7 +21,15 @@ EPSG_TO_WORK_WITH = constants.EPSG_TO_WORK_WITH
 classes = ["Background", "Nothing"]
 
     
+def get_all_polygons_from_labelme_file(labelme_file_path):
+    annotations = utils.get_annotations_from_labelme_file(labelme_file_path)
+    all_polygons = []
+    for annotation in annotations:
+        all_polygons.append({"class_label": annotation["name"], "polygon": annotation["polygon"], "interior_polygons":[]})
+    return all_polygons
 
+    
+    
 def get_all_polygons_from_shapefile(project_dir,classification_class = constants.classification_class):
     
     gdf = gpd.read_file(project_dir)
@@ -146,7 +154,18 @@ def convert_polygon_coords_to_pixel_coords(all_polygons, image_path):
     return result_polygons
 
 
-    
+
+def add_labelme_classes_to_label_dictionary(src_dir):
+    all_image_paths = utils.get_all_image_paths_in_folder(src_dir) 
+    for image_path in all_image_paths:
+        label_me_path = image_path[:-4] + ".json"
+        annotations = utils.get_annotations_from_labelme_file(label_me_path)
+        for annotation in annotations:
+            label = annotation["name"]
+            if not label in classes:
+                classes.append(label)
+    classes.sort()
+
 
 def add_shapefile_classes_to_label_dictionary(shape_file_path):
     all_polygons = get_all_polygons_from_shapefile(shape_file_path)
@@ -175,13 +194,21 @@ def make_folders(project_dir):
         
     return (temp_dir,mask_tiles_dir,image_tiles_dir)
 
+def resize_image(src_path,dest_path,factor=1):
+    image = Image.open(src_path)
+    image.save(dest_path)
 
+    
 
 def run(src_dirs=constants.data_source_folders, working_dir=constants.working_dir):
-
+    
     for src_dir_index,src_dir in enumerate(src_dirs):
         shape_file_path = os.path.join(src_dir,"shapes/shapes.shp")
-        add_shapefile_classes_to_label_dictionary(shape_file_path)
+        if os.path.isfile(shape_file_path):
+            add_shapefile_classes_to_label_dictionary(shape_file_path)
+        else:
+            add_labelme_classes_to_label_dictionary(src_dir)
+            
     print(str(len(classes)) + " classes present in dataset:")
     print(classes)
     
@@ -194,26 +221,37 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
 
     
     for src_dir_index,src_dir in enumerate(src_dirs):
-    
+        
         shape_file_path = os.path.join(src_dir,"shapes/shapes.shp")
+        shape_file_mode = False
+        if os.path.isfile(shape_file_path):
+            shape_file_mode = True
         
-        images_folder = os.path.join(src_dir,"images")
-        
+        if shape_file_mode:
+            images_folder = os.path.join(src_dir,"images")
+        else:
+            images_folder = src_dir
         print("Generating masks for all images in input folder: " + src_dir,flush=True)
         
-        
-
         for image_path in progressbar.progressbar(utils.get_all_image_paths_in_folder(images_folder)):
             
+            if shape_file_mode:
+                projected_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
+                utils.resize_image_and_change_coordinate_system(image_path,projected_image_path)
+                image_path = projected_image_path
+                all_polygons = get_all_polygons_from_shapefile(shape_file_path)
+                all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
+
+            else:
+                resized_image_path = os.path.join(temp_dir, os.path.basename(image_path)[:-4]+"_srcdir" + str(src_dir_index) + ".tif")
+                resize_image(image_path,resized_image_path)
+                labelme_file_path = image_path[:-4] + ".json"
+                image_path = resized_image_path
+                all_polygons = get_all_polygons_from_labelme_file(labelme_file_path)
             
-            projected_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_srcdir" + str(src_dir_index) + ".tif"))
-            utils.resize_image_and_change_coordinate_system(image_path,projected_image_path)
-            image_path = projected_image_path
-            
-            mask_image_path = os.path.join(temp_dir,os.path.basename(image_path).replace(".tif","_mask.tif"))
-            all_polygons = get_all_polygons_from_shapefile(shape_file_path)
-            all_polygons = convert_polygon_coords_to_pixel_coords(all_polygons,image_path)   
                 
+                
+            mask_image_path = os.path.join(temp_dir,os.path.basename(image_path)[:-4]+"_mask.tif")
             make_mask_image(image_path,mask_image_path,all_polygons)
             
             utils.tile_image(mask_image_path,mask_tiles_dir,classes, src_dir_index=src_dir_index, is_mask= True)
@@ -223,15 +261,17 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
         if constants.only_use_area_within_shapefile_polygons[src_dir_index]:
             for mask_tile,image_tile in zip(utils.get_all_image_paths_in_folder(mask_tiles_dir),utils.get_all_image_paths_in_folder(image_tiles_dir)):
                 if "srcdir" + str(src_dir_index) in mask_tile:
-                    colors = Image.open(mask_tile).getcolors()
+                    image = Image.open(mask_tile)
+                    colors = image.getcolors(256*256)
                     for color in colors:
                         if utils.name2color(classes,"Background") == color[1]:
                             os.remove(mask_tile)
                             os.remove(image_tile)
-
-
             
         utils.delete_folder_contents(temp_dir)
+            
+            
+            
     shutil.rmtree(temp_dir)
     print("Splitting all training tiles and masks into train, validation and test sets...",flush=True)
     split_dataset.split_into_train_val_and_test_sets(working_dir)
