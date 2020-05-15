@@ -194,8 +194,29 @@ def make_folders(project_dir):
         
     return (temp_dir,mask_tiles_dir,image_tiles_dir)
 
-def resize_image(src_path,dest_path,factor=1):
+def resize_image_and_polygons(src_dir,src_path,all_polygons,dest_path):
+    metadata_file_path = os.path.join(src_dir,"metadata.txt")
+    gsd = None
+    if os.path.isfile(metadata_file_path):
+        with open(metadata_file_path, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                if "ground_sampling_distance=" in line:
+                    gsd = float(line.strip().split("ground_sampling_distance=")[1])
+    
     image = Image.open(src_path)
+    if gsd:
+        width, height = image.size
+        dst_gsd=constants.ground_sampling_distance
+        ratio = gsd/dst_gsd
+        dst_width = int(width * ratio)
+        dst_height = int(height*ratio)
+        image = image.resize((dst_width,dst_height))
+        
+        for polygon in all_polygons:
+            for index,coord in enumerate(polygon["polygon"]):
+                new_coord = (coord[0]*ratio,coord[1]*ratio)
+                polygon["polygon"][index] = new_coord
     image.save(dest_path)
 
     
@@ -244,10 +265,11 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
 
             else:
                 resized_image_path = os.path.join(temp_dir, os.path.basename(image_path)[:-4]+"_srcdir" + str(src_dir_index) + ".tif")
-                resize_image(image_path,resized_image_path)
                 labelme_file_path = image_path[:-4] + ".json"
-                image_path = resized_image_path
                 all_polygons = get_all_polygons_from_labelme_file(labelme_file_path)
+                resize_image_and_polygons(src_dir,image_path,all_polygons,resized_image_path)
+                
+                image_path = resized_image_path
             
                 
                 
@@ -268,11 +290,11 @@ def run(src_dirs=constants.data_source_folders, working_dir=constants.working_di
                             os.remove(mask_tile)
                             os.remove(image_tile)
             
-        utils.delete_folder_contents(temp_dir)
+        #utils.delete_folder_contents(temp_dir)
             
             
             
-    shutil.rmtree(temp_dir)
+    #shutil.rmtree(temp_dir)
     print("Splitting all training tiles and masks into train, validation and test sets...",flush=True)
     split_dataset.split_into_train_val_and_test_sets(working_dir)
     
